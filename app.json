@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -16,14 +15,50 @@
       "supportsTablet": true
     },
     "android": {
+      "isNewArchEnabled": false, 
+      "splash": {
+        "backgroundColor": "#ffffff"
+      },
+      "notification": {
+        "defaultChannelId": "default"
+      },
+      "package": "com.sistemasaludbienestar.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-location",
+      "expo-notifications",
+      "expo-secure-store",
+      "expo-image-picker",
+      [
+        "@react-native-community/datetimepicker",
+        {
+          "mode": "date"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ccc97ffa-dc6c-4917-aa8d-9c4c855745a1"
+      }
     }
   }
 }

@@ -1,20 +1,46 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { UserProvider } from './frontend/src/context/UserContext';
+import { NavigationContainer } from '@react-navigation/native';
+import LoginScreen from './frontend/src/screens/LoginScreen';
+import RegisterScreen from './frontend/src/screens/RegisterScreen';
+import AppTabs from './AppNavigation';
+import AgendarCitaScreen from './frontend/src/screens/AgendarCitaScreen';
+//SQLProvider
+import { SQLiteProvider } from 'expo-sqlite';
+//InitializeDatabase
+import { initializeDatabase } from './frontend/src/db/database';
 
-export default function App() {
+const Stack = createNativeStackNavigator();
+
+const App = () => {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <UserProvider>
+      <SQLiteProvider databaseName='serviciosMedicos.db' onInit={ initializeDatabase } >
+        <NavigationContainer>
+          <Stack.Navigator 
+            initialRouteName='Login'
+            screenOptions={{
+              headerShown: false
+            }}
+          >
+            <Stack.Screen name='Login' component={LoginScreen} />
+            <Stack.Screen name='Register' component={RegisterScreen} />
+            <Stack.Screen name='Main' component={AppTabs} />
+            <Stack.Screen 
+              name='AgendarCita' 
+              component={AgendarCitaScreen}
+              options={{
+                headerShown: true,
+                title: 'Agendar Consulta',
+                headerStyle: { backgroundColor: '#2196F3' },
+                headerTintColor: '#FFFFFF'
+              }}
+            />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </SQLiteProvider>
+    </UserProvider>
   );
-}
+};
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default App;

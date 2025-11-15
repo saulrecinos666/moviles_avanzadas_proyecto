@@ -12,7 +12,6 @@ import { useSQLiteContext } from 'expo-sqlite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadUserFromSQLite } from './frontend/src/db/userHelper';
 
-// Importar las pantallas de servicios médicos
 import DashboardScreen from "./frontend/src/screens/DashboardScreen";
 import BusquedaMedicosScreen from "./frontend/src/screens/BusquedaMedicosScreen";
 import ConsultasScreen from "./frontend/src/screens/ConsultasScreen";
@@ -24,13 +23,11 @@ import AgendarCitaScreen from "./frontend/src/screens/AgendarCitaScreen";
 import PerfilScreen from "./frontend/src/screens/PerfilScreen";
 import ForoScreen from "./frontend/src/screens/ForoScreen";
 
-// Pantallas para médicos
 import DashboardMedicoScreen from "./frontend/src/screens/medico/DashboardMedicoScreen";
 import MisPacientesScreen from "./frontend/src/screens/medico/MisPacientesScreen";
 import ConsultasMedicoScreen from "./frontend/src/screens/medico/ConsultasMedicoScreen";
 import RecetasMedicoScreen from "./frontend/src/screens/medico/RecetasMedicoScreen";
 
-// Pantallas para admin
 import DashboardAdminScreen from "./frontend/src/screens/admin/DashboardAdminScreen";
 import GestionUsuariosScreen from "./frontend/src/screens/admin/GestionUsuariosScreen";
 import GestionMedicosScreen from "./frontend/src/screens/admin/GestionMedicosScreen";
@@ -41,7 +38,6 @@ import DetalleConsultaScreen from "./frontend/src/screens/DetalleConsultaScreen"
 const Drawer = createDrawerNavigator();
 const Tab = createBottomTabNavigator();
 
-// Componente para el avatar del usuario en el header
 const UserAvatarHeader = () => {
   const { user } = useUser();
   const navigation = useNavigation();
@@ -101,7 +97,6 @@ const headerStyles = StyleSheet.create({
   },
 });
 
-// Componente personalizado para el drawer content que respeta el SafeArea
 const CustomDrawerContent = (props) => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F5F5' }} edges={['top']}>
@@ -131,7 +126,6 @@ const AppDrawer = () => {
             drawerInactiveTintColor: '#666666'
         }}
     >
-        {/* Pantallas para Pacientes */}
         {RoleService.isPaciente(userRole) && (
           <>
             <Drawer.Screen 
@@ -217,7 +211,6 @@ const AppDrawer = () => {
           </>
         )}
 
-        {/* Pantallas para Médicos */}
         {RoleService.isMedico(userRole) && (
           <>
             <Drawer.Screen 
@@ -273,7 +266,6 @@ const AppDrawer = () => {
           </>
         )}
 
-        {/* Pantallas para Admin */}
         {RoleService.isAdmin(userRole) && (
           <>
             <Drawer.Screen 
@@ -319,7 +311,6 @@ const AppDrawer = () => {
           </>
         )}
 
-        {/* Perfil - Todos los roles */}
         <Drawer.Screen 
             name="Perfil" 
             component={PerfilScreen}
@@ -340,25 +331,20 @@ const AppTabs = () => {
   const userRole = user?.rol || 'paciente';
   const insets = useSafeAreaInsets();
 
-  // Sincronizar datos del perfil desde SQLite cuando la app carga
   useEffect(() => {
     const syncUserDataFromSQLite = async () => {
       if (user?.id && db) {
         try {
-          // Agregar un pequeño delay para asegurar que SQLite esté completamente inicializado
           await new Promise(resolve => setTimeout(resolve, 100));
           
           const sqliteUser = await loadUserFromSQLite(db, user.id);
           if (sqliteUser) {
             console.log('AppTabs - Sincronizando datos. SQLite:', sqliteUser?.rol, 'AsyncStorage:', user.rol);
             
-            // Obtener datos actuales de AsyncStorage
             const userData = await AsyncStorage.getItem('userData');
             if (userData) {
               const parsedData = JSON.parse(userData);
               let needsUpdate = false;
-              
-              // Sincronizar todos los datos del perfil desde SQLite
               if (sqliteUser.rol && sqliteUser.rol !== parsedData.rol) {
                 parsedData.rol = sqliteUser.rol;
                 needsUpdate = true;
@@ -395,7 +381,6 @@ const AppTabs = () => {
                 parsedData.fotoPerfil = sqliteUser.fotoPerfil;
                 needsUpdate = true;
               }
-              // Sincronizar ubicación desde SQLite
               if (sqliteUser.latitud !== undefined && sqliteUser.latitud !== null && sqliteUser.latitud !== parsedData.latitud) {
                 parsedData.latitud = sqliteUser.latitud;
                 needsUpdate = true;
@@ -413,7 +398,6 @@ const AppTabs = () => {
             }
           }
         } catch (error) {
-          // Solo registrar errores que no sean de recurso cerrado
           const errorMessage = error?.message || '';
           if (!errorMessage.includes('closed resource') && !errorMessage.includes('Access to closed')) {
             console.error('Error al sincronizar datos en AppTabs:', error);
@@ -444,7 +428,6 @@ const AppTabs = () => {
       tabBarInactiveTintColor: '#9E9E9E',
       tabBarLabelStyle: { fontSize: 12, fontWeight: '600' }
     }}>
-      {/* Tabs para Pacientes */}
       {RoleService.isPaciente(userRole) && (
         <>
           <Tab.Screen 
@@ -529,7 +512,6 @@ const AppTabs = () => {
         </>
       )}
 
-      {/* Tabs para Médicos */}
       {RoleService.isMedico(userRole) && (
         <>
           <Tab.Screen 
@@ -604,7 +586,6 @@ const AppTabs = () => {
         </>
       )}
 
-      {/* Tabs para Admin */}
       {RoleService.isAdmin(userRole) && (
         <>
           <Tab.Screen 
@@ -650,7 +631,6 @@ const AppTabs = () => {
         </>
       )}
 
-      {/* Perfil - Todos los roles */}
       <Tab.Screen 
           name='Perfil' 
           component={PerfilScreen} 

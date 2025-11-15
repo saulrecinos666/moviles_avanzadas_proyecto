@@ -1,12 +1,9 @@
-// Código de inicialización de Firebase usando la sintaxis V8
-
 import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth'; // Autenticación
-import 'firebase/compat/database'; // Realtime Database
-import 'firebase/compat/firestore'; // Firestore
-import 'firebase/compat/storage'; // Storage para archivos
+import 'firebase/compat/auth';
+import 'firebase/compat/database';
+import 'firebase/compat/firestore';
+import 'firebase/compat/storage';
 
-// Su configuración de Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyBTIHqmghC8B1vq1BanvAV8Y8anxrrzE5E",
   authDomain: "sistemaserviciomedico.firebaseapp.com",
@@ -17,12 +14,10 @@ const firebaseConfig = {
   databaseURL: "https://sistemaserviciomedico-default-rtdb.firebaseio.com"
 };
 
-// Validar que la configuración esté completa
 if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
   console.error('Firebase: Configuración incompleta. Verifica tus credenciales.');
 }
 
-// Inicializar Firebase ANTES de exportar cualquier servicio
 let app;
 try {
   if (!firebase.apps.length) {
@@ -39,13 +34,10 @@ try {
   throw error;
 }
 
-// Verificar que la app esté inicializada antes de obtener servicios
 if (!app) {
   throw new Error('Firebase no se pudo inicializar');
 }
 
-// Obtener las instancias de los servicios DESPUÉS de la inicialización
-// En modo compat, firebase.auth() usa automáticamente la app por defecto
 let auth;
 try {
   auth = firebase.auth();
@@ -61,7 +53,6 @@ try {
 
 export { auth };
 
-// Database puede no estar disponible si no está configurado
 let database;
 try {
   if (firebaseConfig.databaseURL) {
@@ -77,7 +68,6 @@ try {
 
 export { database };
 
-// Firestore y Storage
 let firestore, storage;
 try {
   firestore = firebase.firestore();

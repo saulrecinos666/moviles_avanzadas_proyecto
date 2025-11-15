@@ -9,14 +9,11 @@ import AppTabs from './AppNavigation';
 import AgendarCitaScreen from './frontend/src/screens/AgendarCitaScreen';
 import DetalleConsultaScreen from './frontend/src/screens/DetalleConsultaScreen';
 import ProtectedRoute from './frontend/src/components/ProtectedRoute';
-//SQLProvider
 import { SQLiteProvider } from 'expo-sqlite';
-//InitializeDatabase
 import { initializeDatabase } from './frontend/src/db/database';
 
 const Stack = createNativeStackNavigator();
 
-// Wrapper para proteger la ruta AgendarCita
 const ProtectedAgendarCita = ({ navigation, route }) => {
   return (
     <ProtectedRoute

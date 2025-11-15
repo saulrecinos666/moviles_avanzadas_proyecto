@@ -1,21 +1,15 @@
-// Helper para gestionar usuarios en SQLite
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { firestore } from '../config/firebase';
 
-/**
- * Guarda un usuario en SQLite después del registro en Firebase
- */
 export async function saveUserToSQLite(db, firebaseUser, userData) {
   try {
-    // Verificar si el usuario ya existe
     const existingUser = await db.getFirstAsync(
       'SELECT * FROM usuarios WHERE firebaseUid = ? OR email = ?',
       [firebaseUser.uid, firebaseUser.email]
     );
 
     if (existingUser) {
-      // Actualizar usuario existente
       await db.runAsync(
         `UPDATE usuarios SET 
           nombre = ?, 
@@ -40,7 +34,6 @@ export async function saveUserToSQLite(db, firebaseUser, userData) {
         ]
       );
       
-      // También actualizar en Firestore
       try {
         if (firestore) {
           await firestore.collection('usuarios').doc(firebaseUser.uid).set({
@@ -63,8 +56,6 @@ export async function saveUserToSQLite(db, firebaseUser, userData) {
       
       return existingUser.id;
     } else {
-      // Crear nuevo usuario
-      // Generar un hash simple para la contraseña (solo para SQLite, la real está en Firebase)
       const passwordHash = await Crypto.digestStringAsync(
         Crypto.CryptoDigestAlgorithm.SHA256,
         firebaseUser.uid,
@@ -92,7 +83,6 @@ export async function saveUserToSQLite(db, firebaseUser, userData) {
       );
       const userId = result.lastInsertRowId;
       
-      // También guardar en Firestore para sincronización
       try {
         if (firestore) {
           await firestore.collection('usuarios').doc(firebaseUser.uid).set({
@@ -111,7 +101,6 @@ export async function saveUserToSQLite(db, firebaseUser, userData) {
         }
       } catch (firestoreError) {
         console.error('⚠️ Error guardando en Firestore (no crítico):', firestoreError);
-        // No lanzar error, es opcional
       }
       
       return userId;
@@ -122,35 +111,25 @@ export async function saveUserToSQLite(db, firebaseUser, userData) {
   }
 }
 
-/**
- * Verifica si la base de datos SQLite está disponible y lista para usar
- */
 export async function isDatabaseReady(db) {
   if (!db) {
     return false;
   }
   
   try {
-    // Intentar una consulta simple para verificar que la base de datos esté abierta
     await db.getFirstAsync('SELECT 1');
     return true;
   } catch (error) {
-    // Si hay un error, la base de datos no está disponible
     return false;
   }
 }
 
-/**
- * Carga un usuario desde SQLite usando el firebaseUid
- */
 export async function loadUserFromSQLite(db, firebaseUid) {
   try {
-    // Verificar que la base de datos esté disponible
     if (!db || !firebaseUid) {
       return null;
     }
     
-    // Verificar que la base de datos esté lista
     const isReady = await isDatabaseReady(db);
     if (!isReady) {
       console.log('SQLite no está disponible aún');
@@ -163,7 +142,6 @@ export async function loadUserFromSQLite(db, firebaseUid) {
     );
     return user;
   } catch (error) {
-    // Solo registrar error si no es un error de recurso cerrado
     const errorMessage = error?.message || '';
     if (!errorMessage.includes('closed resource') && !errorMessage.includes('Access to closed')) {
       console.error('Error al cargar usuario desde SQLite:', error);
@@ -172,23 +150,16 @@ export async function loadUserFromSQLite(db, firebaseUid) {
   }
 }
 
-/**
- * Actualiza un usuario en SQLite usando el firebaseUid
- */
 export async function updateUserInSQLite(db, firebaseUid, userData) {
   try {
-    // Verificar que la base de datos esté disponible
     if (!db || !firebaseUid) {
       return { success: false, message: 'Base de datos no disponible' };
     }
     
-    // Verificar que la base de datos esté lista
     const isReady = await isDatabaseReady(db);
     if (!isReady) {
       return { success: false, message: 'Base de datos no está lista' };
     }
-    
-    // Verificar si el usuario existe
     const existingUser = await db.getFirstAsync(
       'SELECT * FROM usuarios WHERE firebaseUid = ?',
       [firebaseUid]
@@ -199,7 +170,6 @@ export async function updateUserInSQLite(db, firebaseUid, userData) {
       return { success: false, message: 'Usuario no encontrado' };
     }
 
-    // Actualizar usuario
     await db.runAsync(
       `UPDATE usuarios SET 
         nombre = ?, 
@@ -228,7 +198,6 @@ export async function updateUserInSQLite(db, firebaseUid, userData) {
       ]
     );
 
-    // También actualizar en Firestore si está disponible
     try {
       if (firestore) {
         await firestore.collection('usuarios').doc(firebaseUid).set({
@@ -248,17 +217,8 @@ export async function updateUserInSQLite(db, firebaseUid, userData) {
   }
 }
 
-/**
- * Crea el primer admin directamente en SQLite
- * IMPORTANTE: Este usuario debe existir también en Firebase Auth
- * 
- * Uso:
- * 1. Primero crea el usuario en Firebase Console o usando la app
- * 2. Luego ejecuta esta función con el firebaseUid del usuario creado
- */
 export async function createFirstAdmin(db, firebaseUid, email, nombre) {
   try {
-    // Verificar si ya existe un admin
     const existingAdmin = await db.getFirstAsync(
       'SELECT * FROM usuarios WHERE rol = ? AND activo = 1',
       ['admin']
@@ -269,14 +229,12 @@ export async function createFirstAdmin(db, firebaseUid, email, nombre) {
       return { success: false, message: 'Ya existe un administrador' };
     }
 
-    // Generar hash de contraseña
     const passwordHash = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       firebaseUid,
       { encoding: Crypto.CryptoEncoding.BASE64 }
     );
 
-    // Crear admin
     const result = await db.runAsync(
       `INSERT INTO usuarios (
         nombre, email, password, firebaseUid, rol, activo, fechaRegistro

@@ -93,7 +93,6 @@ const usuarioSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Middleware para encriptar contraseña antes de guardar
 usuarioSchema.pre('save', async function(next) {
     if (!this.isModified('password')) return next();
     
@@ -106,19 +105,16 @@ usuarioSchema.pre('save', async function(next) {
     }
 });
 
-// Método para comparar contraseñas
 usuarioSchema.methods.comparePassword = async function(candidatePassword) {
     return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Método para calcular IMC
 usuarioSchema.methods.calcularIMC = function() {
     if (!this.altura || !this.peso) return null;
     const alturaMetros = this.altura / 100;
     return (this.peso / (alturaMetros * alturaMetros)).toFixed(1);
 };
 
-// Método para obtener categoría de IMC
 usuarioSchema.methods.getCategoriaIMC = function() {
     const imc = this.calcularIMC();
     if (!imc) return null;
@@ -129,7 +125,6 @@ usuarioSchema.methods.getCategoriaIMC = function() {
     return 'Obesidad';
 };
 
-// Método para obtener datos públicos (sin información sensible)
 usuarioSchema.methods.toPublicJSON = function() {
     const userObject = this.toObject();
     delete userObject.password;
@@ -137,7 +132,6 @@ usuarioSchema.methods.toPublicJSON = function() {
     return userObject;
 };
 
-// Índices para optimizar consultas
 usuarioSchema.index({ email: 1 });
 usuarioSchema.index({ firebaseUid: 1 });
 usuarioSchema.index({ fechaRegistro: -1 });

@@ -88,10 +88,9 @@
       }
     },
     "owner": "saulbatres",
-    "runtimeVersion": "50.0.0",
+    "runtimeVersion": "51.0.0",
     "updates": {
-      "enabled": false,
-      "url": "https://u.expo.dev/1db51e5b-ed58-41b9-aab4-5f40f2fdd098"
+      "enabled": false
     }
   }
 }

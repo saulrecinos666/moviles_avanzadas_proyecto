@@ -1,4 +1,3 @@
-//Inicializar base de datos de servicios médicos a distancia
 export async function initializeDatabase(db) {
     console.log('🔄 Inicializando base de datos SQLite...');
     
@@ -6,7 +5,6 @@ export async function initializeDatabase(db) {
         console.error('❌ Error: Base de datos no proporcionada');
         return;
     }
-    // Tabla de usuarios (pacientes, médicos, admin)
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,33 +34,25 @@ export async function initializeDatabase(db) {
         );
     `);
 
-    // Agregar columnas altura y peso si no existen (para bases de datos existentes)
     try {
         await db.execAsync(`ALTER TABLE usuarios ADD COLUMN altura REAL;`);
     } catch (error) {
-        // La columna ya existe, ignorar error
     }
     
     try {
         await db.execAsync(`ALTER TABLE usuarios ADD COLUMN peso REAL;`);
     } catch (error) {
-        // La columna ya existe, ignorar error
     }
 
-    // Agregar columnas latitud y longitud si no existen (para bases de datos existentes)
     try {
         await db.execAsync(`ALTER TABLE usuarios ADD COLUMN latitud REAL;`);
     } catch (error) {
-        // La columna ya existe, ignorar error
     }
     
     try {
         await db.execAsync(`ALTER TABLE usuarios ADD COLUMN longitud REAL;`);
     } catch (error) {
-        // La columna ya existe, ignorar error
     }
-
-    // Tabla de médicos
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS medicos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,8 +80,6 @@ export async function initializeDatabase(db) {
             activo INTEGER DEFAULT 1
         );
     `);
-
-    // Tabla de consultas médicas
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS consultas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,8 +103,6 @@ export async function initializeDatabase(db) {
             FOREIGN KEY (medicoId) REFERENCES medicos (id)
         );
     `);
-
-    // Tabla de recetas electrónicas
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS recetas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,8 +125,6 @@ export async function initializeDatabase(db) {
             FOREIGN KEY (medicoId) REFERENCES medicos (id)
         );
     `);
-
-    // Tabla de historial médico
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS historialMedico (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -160,8 +144,6 @@ export async function initializeDatabase(db) {
             FOREIGN KEY (consultaId) REFERENCES consultas (id)
         );
     `);
-
-    // Tabla de resultados de pruebas
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS resultadosPruebas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -181,8 +163,6 @@ export async function initializeDatabase(db) {
             FOREIGN KEY (medicoId) REFERENCES medicos (id)
         );
     `);
-
-    // Tabla de mensajes de chat
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS mensajesChat (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -199,8 +179,6 @@ export async function initializeDatabase(db) {
             firebaseMessageId TEXT
         );
     `);
-
-    // Tabla de conversaciones
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS conversaciones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -217,8 +195,6 @@ export async function initializeDatabase(db) {
             FOREIGN KEY (medicoId) REFERENCES medicos (id)
         );
     `);
-
-    // Tabla de horarios de médicos
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS horariosMedicos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -231,8 +207,6 @@ export async function initializeDatabase(db) {
             FOREIGN KEY (medicoId) REFERENCES medicos (id)
         );
     `);
-
-    // Tabla de foro de salud
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS foroPosts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -248,8 +222,6 @@ export async function initializeDatabase(db) {
             FOREIGN KEY (usuarioId) REFERENCES usuarios (id)
         );
     `);
-
-    // Tabla de respuestas del foro
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS foroRespuestas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -264,7 +236,6 @@ export async function initializeDatabase(db) {
         );
     `);
 
-    // Tabla de notificaciones
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS notificaciones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -279,8 +250,6 @@ export async function initializeDatabase(db) {
             FOREIGN KEY (usuarioId) REFERENCES usuarios (id)
         );
     `);
-
-    // Tabla de favoritos (médicos favoritos del paciente)
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS medicosFavoritos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

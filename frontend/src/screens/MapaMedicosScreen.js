@@ -9,7 +9,6 @@ import {
   Image
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-// import { MapView, Marker } from 'expo-maps';
 import * as Location from 'expo-location';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useUser } from '../context/UserContext';
@@ -34,7 +33,6 @@ const MapaMedicosScreen = ({ navigation }) => {
 
   const requestLocationPermission = async () => {
     try {
-      // Verificar si los servicios de ubicación están habilitados
       const servicesEnabled = await Location.hasServicesEnabledAsync();
       if (!servicesEnabled) {
         Alert.alert(
@@ -45,7 +43,6 @@ const MapaMedicosScreen = ({ navigation }) => {
         return;
       }
 
-      // Solicitar permisos
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
@@ -56,11 +53,9 @@ const MapaMedicosScreen = ({ navigation }) => {
         return;
       }
 
-      // Obtener ubicación con opciones más robustas
       let location;
       let locationError = null;
       
-      // Intentar primero con precisión alta
       try {
         console.log('📍 Intentando obtener ubicación con precisión alta...');
         location = await Location.getCurrentPositionAsync({
@@ -73,7 +68,6 @@ const MapaMedicosScreen = ({ navigation }) => {
         console.log('⚠️ Error con precisión alta, intentando con precisión baja...', highAccuracyError);
         locationError = highAccuracyError;
         
-        // Intentar con precisión más baja
         try {
           location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Low,
@@ -84,7 +78,6 @@ const MapaMedicosScreen = ({ navigation }) => {
         } catch (lowAccuracyError) {
           console.log('⚠️ Error con precisión baja, intentando con precisión más baja...', lowAccuracyError);
           
-          // Último intento con precisión más baja posible
           try {
             location = await Location.getCurrentPositionAsync({
               accuracy: Location.Accuracy.Lowest,
@@ -105,7 +98,6 @@ const MapaMedicosScreen = ({ navigation }) => {
 
       const { latitude, longitude } = location.coords;
       
-      // Validar que las coordenadas sean válidas
       if (isNaN(latitude) || isNaN(longitude) || latitude === 0 || longitude === 0) {
         throw new Error('Coordenadas de ubicación inválidas');
       }
@@ -121,7 +113,6 @@ const MapaMedicosScreen = ({ navigation }) => {
       });
     } catch (error) {
       console.error('Error obteniendo ubicación:', error);
-      // Mostrar mensaje más amigable al usuario
       const errorMessage = error.message || 'Error desconocido';
       if (errorMessage.includes('location services') || errorMessage.includes('unavailable')) {
         Alert.alert(
@@ -142,7 +133,6 @@ const MapaMedicosScreen = ({ navigation }) => {
   const loadMedicos = async () => {
     try {
       setLoading(true);
-      // Primero cargar todos los médicos para verificar cuántos hay
       const todosUsuariosMedicos = await db.getAllAsync(
         `SELECT * FROM usuarios 
          WHERE rol = ? 
@@ -150,7 +140,6 @@ const MapaMedicosScreen = ({ navigation }) => {
         ['medico']
       );
       
-      // Cargar médicos desde la tabla usuarios con rol 'medico' que tengan ubicación
       const usuariosMedicos = todosUsuariosMedicos.filter(u => 
         u.latitud !== null && 
         u.latitud !== undefined && 
@@ -160,7 +149,6 @@ const MapaMedicosScreen = ({ navigation }) => {
       
       console.log(`📊 Total médicos: ${todosUsuariosMedicos.length}, Con ubicación: ${usuariosMedicos.length}`);
       
-      // Cargar de la tabla medicos que tiene latitud/longitud
       let medicosTabla = [];
       try {
         medicosTabla = await db.getAllAsync(
@@ -174,10 +162,8 @@ const MapaMedicosScreen = ({ navigation }) => {
         console.log('Tabla medicos vacía o no existe');
       }
       
-      // Combinar: usar medicos de tabla medicos si tienen ubicación, sino usar usuarios
       const todosMedicos = [];
       
-      // Primero agregar médicos con ubicación de la tabla medicos
       medicosTabla.forEach(m => {
         if (m.latitud && m.longitud) {
           todosMedicos.push({
@@ -199,10 +185,8 @@ const MapaMedicosScreen = ({ navigation }) => {
         }
       });
       
-      // Agregar médicos de usuarios que tengan ubicación y no estén ya en la lista
       usuariosMedicos.forEach(u => {
         if (u.latitud && u.longitud && !todosMedicos.find(med => med.firebaseUid === u.firebaseUid)) {
-          // Buscar si tiene datos adicionales en tabla medicos
           const medicoTabla = medicosTabla.find(m => m.firebaseUid === u.firebaseUid);
           todosMedicos.push({
             id: u.id,
@@ -223,7 +207,6 @@ const MapaMedicosScreen = ({ navigation }) => {
         }
       });
       
-      // Filtrar solo los que tienen ubicación válida
       const medicosConUbicacion = todosMedicos.filter(m => 
         m.latitud && m.longitud && 
         !isNaN(parseFloat(m.latitud)) && 
@@ -249,32 +232,6 @@ const MapaMedicosScreen = ({ navigation }) => {
       });
     }
   };
-
-  // const renderMedico = (medico) => {
-  //   if (!medico.latitud || !medico.longitud) return null;
-
-  //   return (
-  //     <Marker
-  //       key={medico.id}
-  //       coordinate={{
-  //         latitude: parseFloat(medico.latitud),
-  //         longitude: parseFloat(medico.longitud),
-  //       }}
-  //       title={medico.nombre}
-  //       description={medico.especialidad}
-  //       onPress={() => navigation.navigate('DetalleMedico', { medico })}
-  //     >
-  //       <View style={styles.markerContainer}>
-  //         <MaterialCommunityIcons name="doctor" size={32} color="#2196F3" />
-  //         <View style={styles.markerBadge}>
-  //           <Text style={styles.markerRating}>
-  //             {medico.calificacion ? medico.calificacion.toFixed(1) : 'N/A'}
-  //           </Text>
-  //         </View>
-  //       </View>
-  //     </Marker>
-  //   );
-  // };
 
   if (loading) {
     return (

@@ -18,7 +18,7 @@
         "withoutCredentials": true
         },
         "cache": {
-        "disabled": false
+        "disabled": true
         }
       },
         "production": {
@@ -28,7 +28,7 @@
         "withoutCredentials": true
         },
         "cache": {
-        "disabled": false
+        "disabled": true
         }
       }
     },

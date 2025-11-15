@@ -18,7 +18,7 @@ import { loadUserFromSQLite, saveUserToSQLite } from '../db/userHelper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LoginScreen = ({ navigation }) => {
-  const { login, loading, user, resetPassword } = useUser();
+  const { login, loading, user, resetPassword, reloadUser } = useUser();
   const db = useSQLiteContext();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -103,13 +103,24 @@ const LoginScreen = ({ navigation }) => {
       // Intentar cargar usuario desde SQLite y sincronizar
       try {
         const sqliteUser = await loadUserFromSQLite(db, resultado.user.uid);
-        if (sqliteUser && sqliteUser.rol) {
-          // Si existe en SQLite, actualizar AsyncStorage con el rol
+        if (sqliteUser) {
+          // Si existe en SQLite, actualizar AsyncStorage con TODOS los datos del perfil
           const userData = await AsyncStorage.getItem('userData');
           if (userData) {
             const parsedData = JSON.parse(userData);
-            parsedData.rol = sqliteUser.rol;
+            // Sincronizar todos los datos del perfil desde SQLite
+            parsedData.rol = sqliteUser.rol || parsedData.rol || 'paciente';
+            parsedData.nombre = sqliteUser.nombre || parsedData.nombre || resultado.user.displayName || '';
+            parsedData.email = sqliteUser.email || parsedData.email || resultado.user.email || '';
+            parsedData.telefono = sqliteUser.telefono || parsedData.telefono || '';
+            parsedData.fechaNacimiento = sqliteUser.fechaNacimiento || parsedData.fechaNacimiento || '';
+            parsedData.genero = sqliteUser.genero || parsedData.genero || '';
+            parsedData.altura = sqliteUser.altura || parsedData.altura || 0;
+            parsedData.peso = sqliteUser.peso || parsedData.peso || 0;
+            parsedData.fotoPerfil = sqliteUser.fotoPerfil || parsedData.fotoPerfil || resultado.user.photoURL || '';
             await AsyncStorage.setItem('userData', JSON.stringify(parsedData));
+            // Recargar usuario para que se actualice en el contexto
+            await reloadUser();
           }
         } else if (resultado.user) {
           // Si no existe en SQLite, crearlo

@@ -123,18 +123,124 @@ export async function saveUserToSQLite(db, firebaseUser, userData) {
 }
 
 /**
+ * Verifica si la base de datos SQLite está disponible y lista para usar
+ */
+export async function isDatabaseReady(db) {
+  if (!db) {
+    return false;
+  }
+  
+  try {
+    // Intentar una consulta simple para verificar que la base de datos esté abierta
+    await db.getFirstAsync('SELECT 1');
+    return true;
+  } catch (error) {
+    // Si hay un error, la base de datos no está disponible
+    return false;
+  }
+}
+
+/**
  * Carga un usuario desde SQLite usando el firebaseUid
  */
 export async function loadUserFromSQLite(db, firebaseUid) {
   try {
+    // Verificar que la base de datos esté disponible
+    if (!db || !firebaseUid) {
+      return null;
+    }
+    
+    // Verificar que la base de datos esté lista
+    const isReady = await isDatabaseReady(db);
+    if (!isReady) {
+      console.log('SQLite no está disponible aún');
+      return null;
+    }
+    
     const user = await db.getFirstAsync(
       'SELECT * FROM usuarios WHERE firebaseUid = ? AND activo = 1',
       [firebaseUid]
     );
     return user;
   } catch (error) {
-    console.error('Error al cargar usuario desde SQLite:', error);
+    // Solo registrar error si no es un error de recurso cerrado
+    const errorMessage = error?.message || '';
+    if (!errorMessage.includes('closed resource') && !errorMessage.includes('Access to closed')) {
+      console.error('Error al cargar usuario desde SQLite:', error);
+    }
     return null;
+  }
+}
+
+/**
+ * Actualiza un usuario en SQLite usando el firebaseUid
+ */
+export async function updateUserInSQLite(db, firebaseUid, userData) {
+  try {
+    // Verificar que la base de datos esté disponible
+    if (!db || !firebaseUid) {
+      return { success: false, message: 'Base de datos no disponible' };
+    }
+    
+    // Verificar que la base de datos esté lista
+    const isReady = await isDatabaseReady(db);
+    if (!isReady) {
+      return { success: false, message: 'Base de datos no está lista' };
+    }
+    
+    // Verificar si el usuario existe
+    const existingUser = await db.getFirstAsync(
+      'SELECT * FROM usuarios WHERE firebaseUid = ?',
+      [firebaseUid]
+    );
+
+    if (!existingUser) {
+      console.log('Usuario no encontrado en SQLite para actualizar');
+      return { success: false, message: 'Usuario no encontrado' };
+    }
+
+    // Actualizar usuario
+    await db.runAsync(
+      `UPDATE usuarios SET 
+        nombre = ?, 
+        email = ?,
+        telefono = ?, 
+        fechaNacimiento = ?, 
+        genero = ?,
+        fotoPerfil = ?,
+        altura = ?,
+        peso = ?
+      WHERE firebaseUid = ?`,
+      [
+        userData.nombre !== undefined ? userData.nombre : existingUser.nombre,
+        userData.email !== undefined ? userData.email : existingUser.email,
+        userData.telefono !== undefined ? userData.telefono : existingUser.telefono,
+        userData.fechaNacimiento !== undefined ? userData.fechaNacimiento : existingUser.fechaNacimiento,
+        userData.genero !== undefined ? userData.genero : existingUser.genero,
+        userData.fotoPerfil !== undefined ? userData.fotoPerfil : existingUser.fotoPerfil,
+        userData.altura !== undefined ? userData.altura : existingUser.altura,
+        userData.peso !== undefined ? userData.peso : existingUser.peso,
+        firebaseUid
+      ]
+    );
+
+    // También actualizar en Firestore si está disponible
+    try {
+      if (firestore) {
+        await firestore.collection('usuarios').doc(firebaseUid).set({
+          ...userData,
+          firebaseUid: firebaseUid
+        }, { merge: true });
+        console.log('✅ Usuario actualizado en Firestore');
+      }
+    } catch (firestoreError) {
+      console.error('⚠️ Error actualizando en Firestore (no crítico):', firestoreError);
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error al actualizar usuario en SQLite:', error);
+    return { success: false, error: error.message };
   }
 }
 

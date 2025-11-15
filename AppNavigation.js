@@ -2,6 +2,8 @@ import { createDrawerNavigator } from "@react-navigation/drawer";
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect } from 'react';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DrawerContentScrollView } from '@react-navigation/drawer';
 import { useUser } from './frontend/src/context/UserContext';
 import RoleService from './frontend/src/services/RoleService';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -37,6 +39,15 @@ import DetalleConsultaScreen from "./frontend/src/screens/DetalleConsultaScreen"
 const Drawer = createDrawerNavigator();
 const Tab = createBottomTabNavigator();
 
+// Componente personalizado para el drawer content que respeta el SafeArea
+const CustomDrawerContent = (props) => {
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F5F5' }} edges={['top']}>
+      <DrawerContentScrollView {...props} />
+    </SafeAreaView>
+  );
+};
+
 const AppDrawer = () => {
   const { user } = useUser();
   const userRole = user?.rol || 'paciente';
@@ -44,11 +55,15 @@ const AppDrawer = () => {
   return (
     <Drawer.Navigator 
         initialRouteName={RoleService.isAdmin(userRole) ? "DashboardAdmin" : RoleService.isMedico(userRole) ? "DashboardMedico" : "Dashboard"} 
+        drawerContent={(props) => <CustomDrawerContent {...props} />}
         screenOptions={{ 
             headerShown: true,
             headerStyle: { backgroundColor: '#2196F3' },
             headerTintColor: '#FFFFFF',
-            drawerStyle: { backgroundColor: '#F5F5F5' },
+            drawerStyle: { 
+              backgroundColor: '#F5F5F5',
+              width: 280
+            },
             drawerActiveTintColor: '#2196F3',
             drawerInactiveTintColor: '#666666'
         }}
@@ -260,35 +275,85 @@ const AppTabs = () => {
   const { user, reloadUser } = useUser();
   const db = useSQLiteContext();
   const userRole = user?.rol || 'paciente';
+  const insets = useSafeAreaInsets();
 
-  // Sincronizar rol desde SQLite cuando la app carga
+  // Sincronizar datos del perfil desde SQLite cuando la app carga
   useEffect(() => {
-    const syncRoleFromSQLite = async () => {
+    const syncUserDataFromSQLite = async () => {
       if (user?.id && db) {
         try {
+          // Agregar un pequeño delay para asegurar que SQLite esté completamente inicializado
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
           const sqliteUser = await loadUserFromSQLite(db, user.id);
-          console.log('AppTabs - Sincronizando rol. SQLite:', sqliteUser?.rol, 'AsyncStorage:', user.rol);
-          if (sqliteUser && sqliteUser.rol && sqliteUser.rol !== user.rol) {
-            // Si el rol en SQLite es diferente, actualizar AsyncStorage
+          if (sqliteUser) {
+            console.log('AppTabs - Sincronizando datos. SQLite:', sqliteUser?.rol, 'AsyncStorage:', user.rol);
+            
+            // Obtener datos actuales de AsyncStorage
             const userData = await AsyncStorage.getItem('userData');
             if (userData) {
               const parsedData = JSON.parse(userData);
-              parsedData.rol = sqliteUser.rol;
-              await AsyncStorage.setItem('userData', JSON.stringify(parsedData));
-              await reloadUser();
-              console.log('AppTabs - Rol actualizado a:', sqliteUser.rol);
+              let needsUpdate = false;
+              
+              // Sincronizar todos los datos del perfil desde SQLite
+              if (sqliteUser.rol && sqliteUser.rol !== parsedData.rol) {
+                parsedData.rol = sqliteUser.rol;
+                needsUpdate = true;
+              }
+              if (sqliteUser.nombre && sqliteUser.nombre !== parsedData.nombre) {
+                parsedData.nombre = sqliteUser.nombre;
+                needsUpdate = true;
+              }
+              if (sqliteUser.email && sqliteUser.email !== parsedData.email) {
+                parsedData.email = sqliteUser.email;
+                needsUpdate = true;
+              }
+              if (sqliteUser.telefono && sqliteUser.telefono !== parsedData.telefono) {
+                parsedData.telefono = sqliteUser.telefono;
+                needsUpdate = true;
+              }
+              if (sqliteUser.fechaNacimiento && sqliteUser.fechaNacimiento !== parsedData.fechaNacimiento) {
+                parsedData.fechaNacimiento = sqliteUser.fechaNacimiento;
+                needsUpdate = true;
+              }
+              if (sqliteUser.genero && sqliteUser.genero !== parsedData.genero) {
+                parsedData.genero = sqliteUser.genero;
+                needsUpdate = true;
+              }
+              if (sqliteUser.altura !== undefined && sqliteUser.altura !== parsedData.altura) {
+                parsedData.altura = sqliteUser.altura;
+                needsUpdate = true;
+              }
+              if (sqliteUser.peso !== undefined && sqliteUser.peso !== parsedData.peso) {
+                parsedData.peso = sqliteUser.peso;
+                needsUpdate = true;
+              }
+              if (sqliteUser.fotoPerfil && sqliteUser.fotoPerfil !== parsedData.fotoPerfil) {
+                parsedData.fotoPerfil = sqliteUser.fotoPerfil;
+                needsUpdate = true;
+              }
+              
+              if (needsUpdate) {
+                await AsyncStorage.setItem('userData', JSON.stringify(parsedData));
+                await reloadUser();
+                console.log('AppTabs - Datos del perfil actualizados desde SQLite');
+              }
             }
           }
         } catch (error) {
-          console.error('Error al sincronizar rol en AppTabs:', error);
+          // Solo registrar errores que no sean de recurso cerrado
+          const errorMessage = error?.message || '';
+          if (!errorMessage.includes('closed resource') && !errorMessage.includes('Access to closed')) {
+            console.error('Error al sincronizar datos en AppTabs:', error);
+          }
         }
       }
     };
     
     if (user?.id) {
-      syncRoleFromSQLite();
+      syncUserDataFromSQLite();
     }
-  }, [user?.id, user?.rol, db, reloadUser]);
+  }, [user?.id, db, reloadUser]);
 
   return (
     <Tab.Navigator screenOptions={{
@@ -298,9 +363,9 @@ const AppTabs = () => {
         backgroundColor: '#FFFFFF',
         borderTopColor: '#E0E0E0',
         borderTopWidth: 1,
-        paddingBottom: 5,
+        paddingBottom: Math.max(insets.bottom, 5),
         paddingTop: 5,
-        height: 60
+        height: 60 + Math.max(insets.bottom - 5, 0)
       },
       tabBarActiveTintColor: '#2196F3',
       tabBarInactiveTintColor: '#9E9E9E',

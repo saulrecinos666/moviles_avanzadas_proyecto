@@ -1,5 +1,11 @@
 //Inicializar base de datos de servicios médicos a distancia
 export async function initializeDatabase(db) {
+    console.log('🔄 Inicializando base de datos SQLite...');
+    
+    if (!db) {
+        console.error('❌ Error: Base de datos no proporcionada');
+        return;
+    }
     // Tabla de usuarios (pacientes, médicos, admin)
     await db.execAsync(`
         CREATE TABLE IF NOT EXISTS usuarios (
@@ -21,10 +27,25 @@ export async function initializeDatabase(db) {
             condicionesMedicas TEXT,
             contactoEmergencia TEXT,
             telefonoEmergencia TEXT,
+            altura REAL,
+            peso REAL,
             rol TEXT DEFAULT 'paciente',
             activo INTEGER DEFAULT 1
         );
     `);
+
+    // Agregar columnas altura y peso si no existen (para bases de datos existentes)
+    try {
+        await db.execAsync(`ALTER TABLE usuarios ADD COLUMN altura REAL;`);
+    } catch (error) {
+        // La columna ya existe, ignorar error
+    }
+    
+    try {
+        await db.execAsync(`ALTER TABLE usuarios ADD COLUMN peso REAL;`);
+    } catch (error) {
+        // La columna ya existe, ignorar error
+    }
 
     // Tabla de médicos
     await db.execAsync(`
@@ -256,4 +277,6 @@ export async function initializeDatabase(db) {
             UNIQUE(pacienteId, medicoId)
         );
     `);
+    
+    console.log('✅ Base de datos SQLite inicializada correctamente');
 }

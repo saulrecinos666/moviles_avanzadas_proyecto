@@ -23,12 +23,16 @@
         "defaultChannelId": "default"
       },
       "package": "com.sistemasaludbienestar.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/MiCitaRemota.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
+      "statusBar": {
+        "barStyle": "light-content",
+        "backgroundColor": "#2196F3"
+      },
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -74,7 +78,8 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/95054f53-1c50-4e9f-aeb5-910f92bf3cbd"
+      "url": "https://u.expo.dev/95054f53-1c50-4e9f-aeb5-910f92bf3cbd",
+      "enabled": false
     }
   }
 }

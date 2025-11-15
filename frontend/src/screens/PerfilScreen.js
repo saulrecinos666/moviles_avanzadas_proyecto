@@ -11,16 +11,21 @@ import {
   Image,
   Switch,
   Linking,
-  Platform
+  Platform,
+  ActivityIndicator
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useUser } from '../context/UserContext';
+import { useSQLiteContext } from 'expo-sqlite';
+import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from '../services/NotificationService';
+import { updateUserInSQLite } from '../db/userHelper';
 
 const PerfilScreen = ({ navigation }) => {
-  const { user, updateUser, logout } = useUser();
+  const { user, updateUser, logout, reloadUser } = useUser();
+  const db = useSQLiteContext();
   const [showModal, setShowModal] = useState(false);
   const [perfilData, setPerfilData] = useState({
     nombre: '',
@@ -31,6 +36,8 @@ const PerfilScreen = ({ navigation }) => {
     altura: '',
     peso: ''
   });
+  const [fotoPerfil, setFotoPerfil] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [fechaNacimiento, setFechaNacimiento] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -62,6 +69,7 @@ const PerfilScreen = ({ navigation }) => {
         altura: user.altura ? user.altura.toString() : '',
         peso: user.peso ? user.peso.toString() : ''
       });
+      setFotoPerfil(user.fotoPerfil || null);
       if (user.fechaNacimiento) {
         try {
           const fecha = new Date(user.fechaNacimiento);
@@ -171,19 +179,173 @@ const PerfilScreen = ({ navigation }) => {
       return;
     }
 
-    const datosActualizados = {
-      ...perfilData,
-      altura: parseFloat(perfilData.altura) || 0,
-      peso: parseFloat(perfilData.peso) || 0,
-      fechaNacimiento: fechaNacimiento.toISOString().split('T')[0]
-    };
+    try {
+      const datosActualizados = {
+        ...perfilData,
+        altura: parseFloat(perfilData.altura) || 0,
+        peso: parseFloat(perfilData.peso) || 0,
+        fechaNacimiento: fechaNacimiento.toISOString().split('T')[0],
+        fotoPerfil: fotoPerfil || user?.fotoPerfil || ''
+      };
 
-    const resultado = await updateUser(datosActualizados);
-    if (resultado.success) {
-      Alert.alert('Éxito', 'Perfil actualizado correctamente');
-      setIsEditing(false);
-    } else {
-      Alert.alert('Error', 'No se pudo actualizar el perfil');
+      // Actualizar en AsyncStorage y Firebase
+      const resultado = await updateUser(datosActualizados);
+      
+      // Intentar actualizar en SQLite si está disponible
+      if (resultado.success && user?.id) {
+        try {
+          if (db) {
+            const sqliteResult = await updateUserInSQLite(db, user.id, datosActualizados);
+            if (!sqliteResult.success) {
+              console.log('Advertencia: No se pudo actualizar en SQLite:', sqliteResult.error);
+            }
+          }
+        } catch (sqliteError) {
+          console.log('Error al actualizar en SQLite (no crítico):', sqliteError);
+          // No bloquear la actualización si SQLite falla
+        }
+        
+        // Recargar usuario para obtener datos actualizados
+        try {
+          await reloadUser();
+        } catch (reloadError) {
+          console.log('Error al recargar usuario:', reloadError);
+        }
+      }
+
+      if (resultado.success) {
+        Alert.alert('Éxito', 'Perfil actualizado correctamente');
+        setIsEditing(false);
+      } else {
+        Alert.alert('Error', resultado.error || 'No se pudo actualizar el perfil');
+      }
+    } catch (error) {
+      console.error('Error al guardar perfil:', error);
+      Alert.alert('Error', 'No se pudo actualizar el perfil: ' + error.message);
+    }
+  };
+
+  const handleSeleccionarImagen = async () => {
+    try {
+      // Solicitar permisos de galería primero
+      const { status: libraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (libraryStatus !== 'granted') {
+        Alert.alert('Permisos', 'Se necesitan permisos para acceder a la galería');
+        return;
+      }
+
+      // Solicitar permisos de cámara también
+      const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+      const hasCameraPermission = cameraStatus === 'granted';
+
+      // Crear opciones del Alert
+      const options = [
+        {
+          text: 'Galería',
+          onPress: async () => {
+            try {
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: 'images',
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+              });
+
+              if (!result.canceled && result.assets && result.assets[0]) {
+                await handleSubirImagen(result.assets[0].uri);
+              }
+            } catch (error) {
+              console.error('Error al abrir galería:', error);
+              Alert.alert('Error', 'No se pudo abrir la galería');
+            }
+          }
+        }
+      ];
+
+      // Agregar opción de cámara solo si tiene permisos
+      if (hasCameraPermission) {
+        options.unshift({
+          text: 'Cámara',
+          onPress: async () => {
+            try {
+              const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: 'images',
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+              });
+
+              if (!result.canceled && result.assets && result.assets[0]) {
+                await handleSubirImagen(result.assets[0].uri);
+              }
+            } catch (error) {
+              console.error('Error al abrir cámara:', error);
+              Alert.alert('Error', 'No se pudo abrir la cámara');
+            }
+          }
+        });
+      }
+
+      // Agregar opción de cancelar
+      options.push({
+        text: 'Cancelar',
+        style: 'cancel'
+      });
+
+      // Mostrar opciones
+      Alert.alert(
+        'Seleccionar Imagen',
+        '¿De dónde deseas seleccionar la imagen?',
+        options
+      );
+    } catch (error) {
+      console.error('Error al seleccionar imagen:', error);
+      Alert.alert('Error', 'No se pudo seleccionar la imagen: ' + error.message);
+    }
+  };
+
+  const handleSubirImagen = async (imageUri) => {
+    try {
+      setUploadingImage(true);
+      
+      // Por ahora, guardamos la URI local directamente
+      // En producción, deberías subir la imagen a un servicio de almacenamiento (Firebase Storage, AWS S3, etc.)
+      const datosActualizados = {
+        fotoPerfil: imageUri
+      };
+
+      // Actualizar en AsyncStorage y Firebase
+      const resultado = await updateUser(datosActualizados);
+      
+      // Intentar actualizar en SQLite si está disponible
+      if (resultado.success && user?.id) {
+        try {
+          if (db) {
+            await updateUserInSQLite(db, user.id, datosActualizados);
+          }
+        } catch (sqliteError) {
+          console.log('Error al actualizar imagen en SQLite (no crítico):', sqliteError);
+          // No bloquear la actualización si SQLite falla
+        }
+        
+        try {
+          await reloadUser();
+        } catch (reloadError) {
+          console.log('Error al recargar usuario:', reloadError);
+        }
+      }
+
+      if (resultado.success) {
+        setFotoPerfil(imageUri);
+        Alert.alert('Éxito', 'Imagen de perfil actualizada');
+      } else {
+        Alert.alert('Error', 'No se pudo actualizar la imagen');
+      }
+    } catch (error) {
+      console.error('Error al subir imagen:', error);
+      Alert.alert('Error', 'No se pudo subir la imagen: ' + error.message);
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -241,17 +403,32 @@ const PerfilScreen = ({ navigation }) => {
   const renderPerfilHeader = () => (
     <View style={styles.perfilHeader}>
       <View style={styles.avatarContainer}>
-        {user?.fotoPerfil ? (
-          <Image source={{ uri: user.fotoPerfil }} style={styles.avatar} />
+        {uploadingImage ? (
+          <View style={[styles.avatar, styles.avatarLoading]}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+          </View>
+        ) : fotoPerfil || user?.fotoPerfil ? (
+          <Image 
+            source={{ uri: fotoPerfil || user.fotoPerfil }} 
+            style={styles.avatar}
+            onError={() => {
+              console.log('Error al cargar imagen de perfil');
+              setFotoPerfil(null);
+            }}
+          />
         ) : (
-          <MaterialCommunityIcons name="account" size={60} color="#2196F3" />
+          <MaterialCommunityIcons name="account" size={60} color="#FFFFFF" />
         )}
-        <TouchableOpacity style={styles.editAvatarButton}>
+        <TouchableOpacity 
+          style={styles.editAvatarButton}
+          onPress={handleSeleccionarImagen}
+          disabled={uploadingImage}
+        >
           <MaterialCommunityIcons name="camera" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
-      <Text style={styles.nombreUsuario}>{perfilData.nombre || 'Usuario'}</Text>
-      <Text style={styles.emailUsuario}>{perfilData.email}</Text>
+      <Text style={styles.nombreUsuario}>{perfilData.nombre || user?.nombre || 'Usuario'}</Text>
+      <Text style={styles.emailUsuario}>{perfilData.email || user?.email || ''}</Text>
     </View>
   );
 
@@ -982,6 +1159,11 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     backgroundColor: '#E0E0E0',
+  },
+  avatarLoading: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   editAvatarButton: {
     position: 'absolute',

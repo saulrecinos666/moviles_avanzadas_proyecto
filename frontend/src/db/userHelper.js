@@ -209,7 +209,9 @@ export async function updateUserInSQLite(db, firebaseUid, userData) {
         genero = ?,
         fotoPerfil = ?,
         altura = ?,
-        peso = ?
+        peso = ?,
+        latitud = ?,
+        longitud = ?
       WHERE firebaseUid = ?`,
       [
         userData.nombre !== undefined ? userData.nombre : existingUser.nombre,
@@ -220,6 +222,8 @@ export async function updateUserInSQLite(db, firebaseUid, userData) {
         userData.fotoPerfil !== undefined ? userData.fotoPerfil : existingUser.fotoPerfil,
         userData.altura !== undefined ? userData.altura : existingUser.altura,
         userData.peso !== undefined ? userData.peso : existingUser.peso,
+        userData.latitud !== undefined ? userData.latitud : existingUser.latitud,
+        userData.longitud !== undefined ? userData.longitud : existingUser.longitud,
         firebaseUid
       ]
     );

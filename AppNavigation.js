@@ -1,7 +1,9 @@
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect } from 'react';
+import { View, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DrawerContentScrollView } from '@react-navigation/drawer';
 import { useUser } from './frontend/src/context/UserContext';
@@ -39,6 +41,66 @@ import DetalleConsultaScreen from "./frontend/src/screens/DetalleConsultaScreen"
 const Drawer = createDrawerNavigator();
 const Tab = createBottomTabNavigator();
 
+// Componente para el avatar del usuario en el header
+const UserAvatarHeader = () => {
+  const { user } = useUser();
+  const navigation = useNavigation();
+  
+  return (
+    <TouchableOpacity
+      style={headerStyles.avatarContainer}
+      onPress={() => navigation.navigate('Perfil')}
+      activeOpacity={0.7}
+    >
+      {user?.fotoPerfil ? (
+        <Image 
+          source={{ uri: user.fotoPerfil }} 
+          style={headerStyles.avatar}
+          onError={() => {
+            console.log('Error al cargar imagen de perfil');
+          }}
+        />
+      ) : (
+        <View style={headerStyles.avatarPlaceholder}>
+          <MaterialCommunityIcons name="account" size={22} color="#FFFFFF" />
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
+
+const headerStyles = StyleSheet.create({
+  avatarContainer: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    marginRight: 15,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+  },
+  avatar: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  avatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
+
 // Componente personalizado para el drawer content que respeta el SafeArea
 const CustomDrawerContent = (props) => {
   return (
@@ -60,6 +122,7 @@ const AppDrawer = () => {
             headerShown: true,
             headerStyle: { backgroundColor: '#2196F3' },
             headerTintColor: '#FFFFFF',
+            headerRight: () => <UserAvatarHeader />,
             drawerStyle: { 
               backgroundColor: '#F5F5F5',
               width: 280
@@ -332,6 +395,15 @@ const AppTabs = () => {
                 parsedData.fotoPerfil = sqliteUser.fotoPerfil;
                 needsUpdate = true;
               }
+              // Sincronizar ubicación desde SQLite
+              if (sqliteUser.latitud !== undefined && sqliteUser.latitud !== null && sqliteUser.latitud !== parsedData.latitud) {
+                parsedData.latitud = sqliteUser.latitud;
+                needsUpdate = true;
+              }
+              if (sqliteUser.longitud !== undefined && sqliteUser.longitud !== null && sqliteUser.longitud !== parsedData.longitud) {
+                parsedData.longitud = sqliteUser.longitud;
+                needsUpdate = true;
+              }
               
               if (needsUpdate) {
                 await AsyncStorage.setItem('userData', JSON.stringify(parsedData));
@@ -359,6 +431,7 @@ const AppTabs = () => {
     <Tab.Navigator screenOptions={{
       headerStyle: { backgroundColor: '#2196F3' },
       headerTintColor: '#FFFFFF',
+      headerRight: () => <UserAvatarHeader />,
       tabBarStyle: { 
         backgroundColor: '#FFFFFF',
         borderTopColor: '#E0E0E0',
@@ -431,7 +504,7 @@ const AppTabs = () => {
                   tabBarIcon: ({color, size}) => (
                       <MaterialCommunityIcons name="map" size={size} color={color} />
                   ),
-                  title: 'Mapa'
+                  title: 'Mapa',
               }}
           />
           {/* Pantalla oculta para DetalleConsulta */}

@@ -29,6 +29,8 @@ export async function initializeDatabase(db) {
             telefonoEmergencia TEXT,
             altura REAL,
             peso REAL,
+            latitud REAL,
+            longitud REAL,
             rol TEXT DEFAULT 'paciente',
             activo INTEGER DEFAULT 1
         );
@@ -43,6 +45,19 @@ export async function initializeDatabase(db) {
     
     try {
         await db.execAsync(`ALTER TABLE usuarios ADD COLUMN peso REAL;`);
+    } catch (error) {
+        // La columna ya existe, ignorar error
+    }
+
+    // Agregar columnas latitud y longitud si no existen (para bases de datos existentes)
+    try {
+        await db.execAsync(`ALTER TABLE usuarios ADD COLUMN latitud REAL;`);
+    } catch (error) {
+        // La columna ya existe, ignorar error
+    }
+    
+    try {
+        await db.execAsync(`ALTER TABLE usuarios ADD COLUMN longitud REAL;`);
     } catch (error) {
         // La columna ya existe, ignorar error
     }

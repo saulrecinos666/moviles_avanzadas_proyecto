@@ -57,7 +57,16 @@
     },
     "plugins": [
       "expo-sqlite",
-      "expo-location",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Esta app necesita acceso a tu ubicación para mostrarte los médicos cercanos.",
+          "locationAlwaysPermission": "Esta app necesita acceso a tu ubicación en segundo plano.",
+          "locationWhenInUsePermission": "Esta app necesita acceso a tu ubicación para mostrarte los médicos cercanos.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ],
       "expo-notifications",
       "expo-secure-store",
       "expo-image-picker",

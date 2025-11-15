@@ -115,9 +115,16 @@ const LoginScreen = ({ navigation }) => {
             parsedData.telefono = sqliteUser.telefono || parsedData.telefono || '';
             parsedData.fechaNacimiento = sqliteUser.fechaNacimiento || parsedData.fechaNacimiento || '';
             parsedData.genero = sqliteUser.genero || parsedData.genero || '';
-            parsedData.altura = sqliteUser.altura || parsedData.altura || 0;
-            parsedData.peso = sqliteUser.peso || parsedData.peso || 0;
+            parsedData.altura = sqliteUser.altura !== undefined && sqliteUser.altura !== null ? sqliteUser.altura : (parsedData.altura || 0);
+            parsedData.peso = sqliteUser.peso !== undefined && sqliteUser.peso !== null ? sqliteUser.peso : (parsedData.peso || 0);
             parsedData.fotoPerfil = sqliteUser.fotoPerfil || parsedData.fotoPerfil || resultado.user.photoURL || '';
+            // Sincronizar ubicación desde SQLite
+            if (sqliteUser.latitud !== undefined && sqliteUser.latitud !== null) {
+              parsedData.latitud = sqliteUser.latitud;
+            }
+            if (sqliteUser.longitud !== undefined && sqliteUser.longitud !== null) {
+              parsedData.longitud = sqliteUser.longitud;
+            }
             await AsyncStorage.setItem('userData', JSON.stringify(parsedData));
             // Recargar usuario para que se actualice en el contexto
             await reloadUser();

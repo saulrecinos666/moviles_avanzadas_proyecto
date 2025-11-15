@@ -68,28 +68,34 @@ const BusquedaMedicosScreen = ({ navigation }) => {
       }
       
       // Combinar y mapear usuarios médicos al formato esperado
-      const medicosMapeados = usuariosMedicos.map(u => ({
-        id: u.id,
-        nombre: u.nombre,
-        email: u.email,
-        telefono: u.telefono,
-        especialidad: 'Medicina General', // Valor por defecto
-        subespecialidad: null,
-        numeroLicencia: null,
-        experiencia: null,
-        idiomas: 'Español',
-        direccion: u.direccion || '',
-        ciudad: u.ciudad || '',
-        disponible: 1,
-        calificacion: 0,
-        totalCalificaciones: 0,
-        fotoPerfil: u.fotoPerfil || '',
-        biografia: null,
-        precioConsulta: null,
-        fechaRegistro: u.fechaRegistro,
-        firebaseUid: u.firebaseUid,
-        activo: u.activo
-      }));
+      const medicosMapeados = usuariosMedicos.map(u => {
+        // Buscar si tiene datos adicionales en tabla medicos
+        const medicoTabla = medicosTabla.find(m => m.firebaseUid === u.firebaseUid);
+        return {
+          id: u.id,
+          nombre: u.nombre,
+          email: u.email,
+          telefono: u.telefono,
+          especialidad: medicoTabla?.especialidad || 'Medicina General',
+          subespecialidad: medicoTabla?.subespecialidad || null,
+          numeroLicencia: medicoTabla?.numeroLicencia || null,
+          experiencia: medicoTabla?.experiencia || null,
+          idiomas: medicoTabla?.idiomas || 'Español',
+          direccion: u.direccion || medicoTabla?.direccion || '',
+          ciudad: u.ciudad || medicoTabla?.ciudad || '',
+          latitud: u.latitud || medicoTabla?.latitud || null,
+          longitud: u.longitud || medicoTabla?.longitud || null,
+          disponible: medicoTabla?.disponible !== undefined ? medicoTabla.disponible : 1,
+          calificacion: medicoTabla?.calificacion || 0,
+          totalCalificaciones: medicoTabla?.totalCalificaciones || 0,
+          fotoPerfil: u.fotoPerfil || medicoTabla?.fotoPerfil || '',
+          biografia: medicoTabla?.biografia || null,
+          precioConsulta: medicoTabla?.precioConsulta || null,
+          fechaRegistro: u.fechaRegistro,
+          firebaseUid: u.firebaseUid,
+          activo: u.activo
+        };
+      });
       
       // Combinar con médicos de la tabla medicos (evitar duplicados)
       const todosMedicos = [...medicosMapeados];

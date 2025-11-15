@@ -5,7 +5,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert
+  Alert,
+  Image
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 // import { MapView, Marker } from 'expo-maps';
@@ -33,18 +34,84 @@ const MapaMedicosScreen = ({ navigation }) => {
 
   const requestLocationPermission = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      // Verificar si los servicios de ubicación están habilitados
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
         Alert.alert(
-          'Permiso de ubicación',
-          'Necesitamos tu ubicación para mostrarte los médicos cercanos',
+          'Servicios de ubicación deshabilitados',
+          'Por favor, habilita los servicios de ubicación en la configuración de tu dispositivo para usar esta función.',
           [{ text: 'OK' }]
         );
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({});
+      // Solicitar permisos
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permiso de ubicación',
+          'Necesitamos tu ubicación para mostrarte los médicos cercanos. Por favor, permite el acceso a la ubicación en la configuración de la app.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Obtener ubicación con opciones más robustas
+      let location;
+      let locationError = null;
+      
+      // Intentar primero con precisión alta
+      try {
+        console.log('📍 Intentando obtener ubicación con precisión alta...');
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          timeout: 15000,
+          maximumAge: 60000,
+        });
+        console.log('✅ Ubicación obtenida:', location.coords);
+      } catch (highAccuracyError) {
+        console.log('⚠️ Error con precisión alta, intentando con precisión baja...', highAccuracyError);
+        locationError = highAccuracyError;
+        
+        // Intentar con precisión más baja
+        try {
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Low,
+            timeout: 20000,
+            maximumAge: 300000, // 5 minutos
+          });
+          console.log('✅ Ubicación obtenida con precisión baja:', location.coords);
+        } catch (lowAccuracyError) {
+          console.log('⚠️ Error con precisión baja, intentando con precisión más baja...', lowAccuracyError);
+          
+          // Último intento con precisión más baja posible
+          try {
+            location = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Lowest,
+              timeout: 25000,
+              maximumAge: 600000, // 10 minutos
+            });
+            console.log('✅ Ubicación obtenida con precisión más baja:', location.coords);
+          } catch (lowestAccuracyError) {
+            console.error('❌ Error obteniendo ubicación con todos los métodos:', lowestAccuracyError);
+            throw lowestAccuracyError;
+          }
+        }
+      }
+      
+      if (!location || !location.coords) {
+        throw new Error('No se pudo obtener la ubicación después de múltiples intentos');
+      }
+
       const { latitude, longitude } = location.coords;
+      
+      // Validar que las coordenadas sean válidas
+      if (isNaN(latitude) || isNaN(longitude) || latitude === 0 || longitude === 0) {
+        throw new Error('Coordenadas de ubicación inválidas');
+      }
+      
+      console.log('✅ Coordenadas válidas:', { latitude, longitude });
+      
       setUserLocation({ latitude, longitude });
       setRegion({
         latitude,
@@ -54,19 +121,44 @@ const MapaMedicosScreen = ({ navigation }) => {
       });
     } catch (error) {
       console.error('Error obteniendo ubicación:', error);
+      // Mostrar mensaje más amigable al usuario
+      const errorMessage = error.message || 'Error desconocido';
+      if (errorMessage.includes('location services') || errorMessage.includes('unavailable')) {
+        Alert.alert(
+          'Ubicación no disponible',
+          'No se pudo obtener tu ubicación. Verifica que:\n\n• Los servicios de ubicación estén habilitados\n• La app tenga permisos de ubicación\n• Estés en un lugar con buena señal GPS',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Error de ubicación',
+          'No se pudo obtener tu ubicación. Intenta nuevamente más tarde.',
+          [{ text: 'OK' }]
+        );
+      }
     }
   };
 
   const loadMedicos = async () => {
     try {
       setLoading(true);
-      // Cargar médicos desde la tabla usuarios con rol 'medico'
-      const usuariosMedicos = await db.getAllAsync(
+      // Primero cargar todos los médicos para verificar cuántos hay
+      const todosUsuariosMedicos = await db.getAllAsync(
         `SELECT * FROM usuarios 
          WHERE rol = ? 
          AND activo = 1`,
         ['medico']
       );
+      
+      // Cargar médicos desde la tabla usuarios con rol 'medico' que tengan ubicación
+      const usuariosMedicos = todosUsuariosMedicos.filter(u => 
+        u.latitud !== null && 
+        u.latitud !== undefined && 
+        u.longitud !== null && 
+        u.longitud !== undefined
+      );
+      
+      console.log(`📊 Total médicos: ${todosUsuariosMedicos.length}, Con ubicación: ${usuariosMedicos.length}`);
       
       // Cargar de la tabla medicos que tiene latitud/longitud
       let medicosTabla = [];
@@ -74,7 +166,9 @@ const MapaMedicosScreen = ({ navigation }) => {
         medicosTabla = await db.getAllAsync(
           `SELECT * FROM medicos 
            WHERE activo = 1 
-           AND disponible = 1`
+           AND disponible = 1
+           AND latitud IS NOT NULL 
+           AND longitud IS NOT NULL`
         );
       } catch (e) {
         console.log('Tabla medicos vacía o no existe');
@@ -105,23 +199,23 @@ const MapaMedicosScreen = ({ navigation }) => {
         }
       });
       
-      // Agregar médicos de usuarios que no estén ya en la lista
+      // Agregar médicos de usuarios que tengan ubicación y no estén ya en la lista
       usuariosMedicos.forEach(u => {
-        if (!todosMedicos.find(med => med.firebaseUid === u.firebaseUid)) {
-          // Buscar si tiene ubicación en tabla medicos
-          const medicoConUbicacion = medicosTabla.find(m => m.firebaseUid === u.firebaseUid);
+        if (u.latitud && u.longitud && !todosMedicos.find(med => med.firebaseUid === u.firebaseUid)) {
+          // Buscar si tiene datos adicionales en tabla medicos
+          const medicoTabla = medicosTabla.find(m => m.firebaseUid === u.firebaseUid);
           todosMedicos.push({
             id: u.id,
             nombre: u.nombre,
             email: u.email,
             telefono: u.telefono,
-            especialidad: 'Medicina General',
-            direccion: u.direccion || '',
-            ciudad: u.ciudad || '',
-            latitud: medicoConUbicacion?.latitud || null,
-            longitud: medicoConUbicacion?.longitud || null,
-            disponible: 1,
-            calificacion: 0,
+            especialidad: medicoTabla?.especialidad || 'Medicina General',
+            direccion: u.direccion || medicoTabla?.direccion || '',
+            ciudad: u.ciudad || medicoTabla?.ciudad || '',
+            latitud: u.latitud,
+            longitud: u.longitud,
+            disponible: medicoTabla?.disponible !== undefined ? medicoTabla.disponible : 1,
+            calificacion: medicoTabla?.calificacion || 0,
             fotoPerfil: u.fotoPerfil || '',
             firebaseUid: u.firebaseUid,
             activo: u.activo
@@ -129,10 +223,15 @@ const MapaMedicosScreen = ({ navigation }) => {
         }
       });
       
-      // Filtrar solo los que tienen ubicación
-      const medicosConUbicacion = todosMedicos.filter(m => m.latitud && m.longitud);
+      // Filtrar solo los que tienen ubicación válida
+      const medicosConUbicacion = todosMedicos.filter(m => 
+        m.latitud && m.longitud && 
+        !isNaN(parseFloat(m.latitud)) && 
+        !isNaN(parseFloat(m.longitud))
+      );
       
       setMedicos(medicosConUbicacion);
+      console.log(`✅ Cargados ${medicosConUbicacion.length} médico(s) con ubicación`);
     } catch (error) {
       console.error('Error cargando médicos:', error);
       Alert.alert('Error', 'No se pudieron cargar los médicos');
@@ -189,8 +288,21 @@ const MapaMedicosScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <View style={styles.map}>
-        <Text style={styles.loadingText}>Mapa temporalmente deshabilitado</Text>
-        <Text style={styles.loadingText}>{medicos.length} médico(s) disponible(s)</Text>
+        {medicos.length === 0 ? (
+          <View style={styles.emptyStateContainer}>
+            <MaterialCommunityIcons name="map-marker-off" size={64} color="#ccc" />
+            <Text style={styles.emptyStateTitle}>No hay médicos con ubicación</Text>
+            <Text style={styles.emptyStateText}>
+              Los médicos deben guardar su ubicación en su perfil para aparecer en el mapa.{'\n\n'}
+              Ve a tu perfil como médico y toca "Guardar Mi Ubicación" para que los pacientes puedan encontrarte.
+            </Text>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.loadingText}>Mapa temporalmente deshabilitado</Text>
+            <Text style={styles.loadingText}>{medicos.length} médico(s) disponible(s)</Text>
+          </>
+        )}
       </View>
       {/* <MapView
         style={styles.map}
@@ -268,10 +380,59 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
-  controlsContainer: {
+  userAvatarContainer: {
     position: 'absolute',
     right: 15,
     top: 15,
+    zIndex: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    borderWidth: 2,
+    borderColor: '#2196F3',
+  },
+  userAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  userAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#2196F3',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  controlsContainer: {
+    position: 'absolute',
+    right: 15,
+    top: 75,
   },
   controlButton: {
     width: 48,

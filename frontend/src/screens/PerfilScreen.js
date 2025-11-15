@@ -18,10 +18,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useUser } from '../context/UserContext';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationService from '../services/NotificationService';
 import { updateUserInSQLite } from '../db/userHelper';
+import RoleService from '../services/RoleService';
 
 const PerfilScreen = ({ navigation }) => {
   const { user, updateUser, logout, reloadUser } = useUser();
@@ -41,6 +43,8 @@ const PerfilScreen = ({ navigation }) => {
   const [fechaNacimiento, setFechaNacimiento] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [savingLocation, setSavingLocation] = useState(false);
+  const [ubicacionGuardada, setUbicacionGuardada] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showAyudaModal, setShowAyudaModal] = useState(false);
   const [showAcercaModal, setShowAcercaModal] = useState(false);
@@ -70,6 +74,7 @@ const PerfilScreen = ({ navigation }) => {
         peso: user.peso ? user.peso.toString() : ''
       });
       setFotoPerfil(user.fotoPerfil || null);
+      setUbicacionGuardada(!!(user.latitud && user.longitud));
       if (user.fechaNacimiento) {
         try {
           const fecha = new Date(user.fechaNacimiento);
@@ -349,6 +354,204 @@ const PerfilScreen = ({ navigation }) => {
     }
   };
 
+  const handleGuardarUbicacion = async () => {
+    try {
+      setSavingLocation(true);
+      
+      // Verificar si los servicios de ubicación están habilitados
+      let servicesEnabled = false;
+      try {
+        servicesEnabled = await Location.hasServicesEnabledAsync();
+      } catch (checkError) {
+        console.log('Error verificando servicios de ubicación:', checkError);
+        // Continuar de todas formas, algunos dispositivos pueden no soportar esta verificación
+      }
+      
+      if (!servicesEnabled) {
+        Alert.alert(
+          'Servicios de ubicación deshabilitados',
+          'Por favor, habilita los servicios de ubicación en la configuración de tu dispositivo para guardar tu ubicación.',
+          [{ text: 'OK' }]
+        );
+        setSavingLocation(false);
+        return;
+      }
+      
+      // Solicitar permisos de ubicación
+      let permissionStatus = 'undetermined';
+      try {
+        const permissionResult = await Location.requestForegroundPermissionsAsync();
+        permissionStatus = permissionResult.status;
+      } catch (permissionError) {
+        console.log('Error solicitando permisos:', permissionError);
+        Alert.alert(
+          'Error de permisos',
+          'No se pudieron solicitar los permisos de ubicación. Por favor, verifica la configuración de la app.',
+          [{ text: 'OK' }]
+        );
+        setSavingLocation(false);
+        return;
+      }
+      
+      if (permissionStatus !== 'granted') {
+        Alert.alert(
+          'Permisos de ubicación',
+          'Se necesitan permisos de ubicación para guardar tu ubicación. Por favor, permite el acceso en la configuración de la app.',
+          [{ text: 'OK' }]
+        );
+        setSavingLocation(false);
+        return;
+      }
+
+      // Obtener ubicación actual con opciones más robustas
+      let location;
+      let locationError = null;
+      
+      // Intentar primero con precisión alta
+      try {
+        console.log('📍 Intentando obtener ubicación con precisión alta...');
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          timeout: 15000,
+          maximumAge: 60000,
+        });
+        console.log('✅ Ubicación obtenida con precisión alta:', location.coords);
+      } catch (highAccuracyError) {
+        console.log('⚠️ Error con precisión alta, intentando con precisión baja...', highAccuracyError);
+        locationError = highAccuracyError;
+        
+        // Intentar con precisión más baja
+        try {
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Low,
+            timeout: 20000,
+            maximumAge: 300000, // 5 minutos
+          });
+          console.log('✅ Ubicación obtenida con precisión baja:', location.coords);
+        } catch (lowAccuracyError) {
+          console.log('⚠️ Error con precisión baja, intentando con precisión más baja...', lowAccuracyError);
+          
+          // Último intento con precisión más baja posible
+          try {
+            location = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Lowest,
+              timeout: 25000,
+              maximumAge: 600000, // 10 minutos
+            });
+            console.log('✅ Ubicación obtenida con precisión más baja:', location.coords);
+          } catch (lowestAccuracyError) {
+            console.error('❌ Error obteniendo ubicación con todos los métodos:', lowestAccuracyError);
+            throw lowestAccuracyError;
+          }
+        }
+      }
+
+      if (!location || !location.coords) {
+        throw new Error('No se pudo obtener la ubicación después de múltiples intentos');
+      }
+
+      const { latitude, longitude } = location.coords;
+      
+      // Validar que las coordenadas sean válidas
+      if (isNaN(latitude) || isNaN(longitude) || latitude === 0 || longitude === 0) {
+        throw new Error('Coordenadas de ubicación inválidas');
+      }
+      
+      console.log('✅ Coordenadas válidas:', { latitude, longitude });
+
+      // Guardar ubicación
+      const datosActualizados = {
+        latitud: latitude,
+        longitud: longitude
+      };
+
+      // Actualizar en AsyncStorage y Firebase
+      const resultado = await updateUser(datosActualizados);
+      
+      // Intentar actualizar en SQLite si está disponible
+      if (resultado.success && user?.id) {
+        try {
+          if (db) {
+            await updateUserInSQLite(db, user.id, datosActualizados);
+          }
+        } catch (sqliteError) {
+          console.log('Error al actualizar ubicación en SQLite (no crítico):', sqliteError);
+        }
+        
+        try {
+          await reloadUser();
+        } catch (reloadError) {
+          console.log('Error al recargar usuario:', reloadError);
+        }
+      }
+
+      if (resultado.success) {
+        setUbicacionGuardada(true);
+        Alert.alert(
+          'Éxito', 
+          `Ubicación guardada correctamente\nLatitud: ${latitude.toFixed(6)}\nLongitud: ${longitude.toFixed(6)}`
+        );
+      } else {
+        Alert.alert('Error', 'No se pudo guardar la ubicación');
+      }
+    } catch (error) {
+      console.error('Error al guardar ubicación:', error);
+      const errorMessage = error?.message || error?.toString() || 'Error desconocido';
+      
+      // Mensajes de error más específicos
+      if (errorMessage.includes('location services') || 
+          errorMessage.includes('unavailable') ||
+          errorMessage.includes('Location services are disabled') ||
+          errorMessage.includes('Current location is unavailable')) {
+        Alert.alert(
+          'Ubicación no disponible',
+          'No se pudo obtener tu ubicación después de intentar con diferentes niveles de precisión.\n\n' +
+          'Posibles causas:\n' +
+          '• Estás usando un emulador/simulador (usa un dispositivo físico)\n' +
+          '• El GPS no está recibiendo señal (ve a un lugar abierto)\n' +
+          '• Los servicios de ubicación necesitan reiniciarse\n\n' +
+          'Soluciones:\n' +
+          '1. Si usas emulador: Configura una ubicación manual en el emulador\n' +
+          '2. Si usas dispositivo físico: Ve a un lugar abierto con buena señal\n' +
+          '3. Reinicia los servicios de ubicación en tu dispositivo\n' +
+          '4. Verifica que el modo de alta precisión esté activado',
+          [{ text: 'Entendido' }]
+        );
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('timed out')) {
+        Alert.alert(
+          'Tiempo de espera agotado',
+          'No se pudo obtener tu ubicación a tiempo. Por favor:\n\n' +
+          '• Verifica que tengas buena señal GPS\n' +
+          '• Intenta estar en un lugar abierto\n' +
+          '• Vuelve a intentar',
+          [{ text: 'OK' }]
+        );
+      } else if (errorMessage.includes('permission') || errorMessage.includes('denied')) {
+        Alert.alert(
+          'Permisos denegados',
+          'La app no tiene permisos para acceder a tu ubicación. Por favor:\n\n' +
+          '1. Ve a Configuración de la app\n' +
+          '2. Permite el acceso a la ubicación\n' +
+          '3. Vuelve a intentar',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Error al obtener ubicación',
+          `No se pudo obtener tu ubicación.\n\nError: ${errorMessage}\n\n` +
+          'Por favor, verifica que:\n' +
+          '• Los servicios de ubicación estén habilitados\n' +
+          '• La app tenga permisos de ubicación\n' +
+          '• Estés en un lugar con buena señal',
+          [{ text: 'OK' }]
+        );
+      }
+    } finally {
+      // Asegurarse de que el estado de carga siempre se resetee
+      setSavingLocation(false);
+    }
+  };
+
   const handleLogout = async () => {
     Alert.alert(
       'Cerrar Sesión',
@@ -518,7 +721,44 @@ const PerfilScreen = ({ navigation }) => {
           <Text style={styles.infoValue}>{perfilData.genero || 'No especificado'}</Text>
         </View>
         
+        {/* Mostrar ubicación solo para médicos */}
+        {RoleService.isMedico(user?.rol) && (
+          <View style={styles.infoItem}>
+            <MaterialCommunityIcons name="map-marker" size={20} color="#666" />
+            <Text style={styles.infoLabel}>Ubicación:</Text>
+            <Text style={styles.infoValue}>
+              {ubicacionGuardada 
+                ? `Lat: ${user?.latitud?.toFixed(4) || 'N/A'}, Lng: ${user?.longitud?.toFixed(4) || 'N/A'}`
+                : 'No configurada'}
+            </Text>
+          </View>
+        )}
+        
       </View>
+      
+      {/* Botón para guardar ubicación solo para médicos */}
+      {RoleService.isMedico(user?.rol) && (
+        <TouchableOpacity
+          style={[styles.locationButton, ubicacionGuardada && styles.locationButtonSaved]}
+          onPress={handleGuardarUbicacion}
+          disabled={savingLocation}
+        >
+          {savingLocation ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <>
+              <MaterialCommunityIcons 
+                name={ubicacionGuardada ? "map-marker-check" : "map-marker"} 
+                size={20} 
+                color="#FFFFFF" 
+              />
+              <Text style={styles.locationButtonText}>
+                {ubicacionGuardada ? 'Actualizar Ubicación' : 'Guardar Mi Ubicación'}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -1631,6 +1871,30 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#333333',
+    marginLeft: 10,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2196F3',
+    padding: 15,
+    margin: 15,
+    marginTop: 10,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  locationButtonSaved: {
+    backgroundColor: '#4CAF50',
+  },
+  locationButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
     marginLeft: 10,
   },
 });

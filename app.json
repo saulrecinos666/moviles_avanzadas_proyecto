@@ -22,8 +22,8 @@
       "notification": {
         "defaultChannelId": "default"
       },
-      "package": "com.sistemasaludbienestar.app",
-      "versionCode": 7,
+      "package": "com.sistemasaludbienestar.app.final",
+      "versionCode": 8,
       "adaptiveIcon": {
         "foregroundImage": "./assets/MiCitaRemota.png",
         "backgroundColor": "#ffffff"

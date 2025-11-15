@@ -1,31 +1,32 @@
 {
-  "cli": {
-    "version": ">= 5.2.0"
+    "cli": {
+      "version": ">= 5.2.0",
+      "appVersionSource": "remote"
   },
-  "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
-    },
-    "preview": {
-      "distribution": "internal",
-      "env": {
-        "EXPO_ENABLE_NEW_ARCHITECTURE": "false"
+    "build": {
+       "development": {
+       "developmentClient": true,
+       "distribution": "internal"
       },
-      "android": {
+        "preview": {
+        "distribution": "internal",
+        "env": {
+        "EXPO_ENABLE_NEW_ARCHITECTURE": "false"
+        },
+        "android": {
         "buildType": "apk", 
-        "withoutCredentials": true 
-      }
-    },
-    "production": {
-      "distribution": "internal",
-      "android": {
+        "withoutCredentials": true
+        }
+      },
+        "production": {
+        "distribution": "internal",
+        "android": {
         "buildType": "apk",
         "withoutCredentials": true
+        }
       }
-    }
-  },
-  "submit": {
+    },
+    "submit": {
     "production": {}
+    }
   }
-}

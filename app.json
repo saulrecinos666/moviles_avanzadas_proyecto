@@ -23,7 +23,7 @@
         "defaultChannelId": "default"
       },
       "package": "com.sistemasaludbienestar.app.v8",
-      "versionCode": 9,
+      "versionCode": 10,
       "adaptiveIcon": {
         "foregroundImage": "./assets/MiCitaRemota.png",
         "backgroundColor": "#ffffff"
@@ -88,9 +88,10 @@
       }
     },
     "owner": "saulbatres",
-    "runtimeVersion": "49.0.0",
+    "runtimeVersion": "50.0.0",
     "updates": {
-      "enabled": false
+      "enabled": false,
+      "url": "https://u.expo.dev/1db51e5b-ed58-41b9-aab4-5f40f2fdd098"
     }
   }
 }

@@ -16,6 +16,9 @@
         "android": {
         "buildType": "apk", 
         "withoutCredentials": true
+        },
+        "cache": {
+        "disabled": false
         }
       },
         "production": {
@@ -23,6 +26,9 @@
         "android": {
         "buildType": "apk",
         "withoutCredentials": true
+        },
+        "cache": {
+        "disabled": false
         }
       }
     },

@@ -23,7 +23,7 @@
         "defaultChannelId": "default"
       },
       "package": "com.sistemasaludbienestar.app.v8",
-      "versionCode": 8,
+      "versionCode": 9,
       "adaptiveIcon": {
         "foregroundImage": "./assets/MiCitaRemota.png",
         "backgroundColor": "#ffffff"

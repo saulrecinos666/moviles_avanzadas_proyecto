@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "MiCitaRemota",
-    "slug": "mi-citaremota",
+    "slug": "mi-cita-remota-final",
     "version": "3.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -23,7 +23,7 @@
         "defaultChannelId": "default"
       },
       "package": "com.sistemasaludbienestar.app",
-      "versionCode": 6,
+      "versionCode": 7,
       "adaptiveIcon": {
         "foregroundImage": "./assets/MiCitaRemota.png",
         "backgroundColor": "#ffffff"

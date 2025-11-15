@@ -22,7 +22,7 @@
       "notification": {
         "defaultChannelId": "default"
       },
-      "package": "com.sistemasaludbienestar.app.final",
+      "package": "com.sistemasaludbienestar.app.v8",
       "versionCode": 8,
       "adaptiveIcon": {
         "foregroundImage": "./assets/MiCitaRemota.png",

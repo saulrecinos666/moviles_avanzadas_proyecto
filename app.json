@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "MiCitaRemota",
-    "slug": "mi-cita-remota",
+    "slug": "mi-citaremota",
     "version": "3.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

@@ -60,14 +60,79 @@ const MapaMedicosScreen = ({ navigation }) => {
   const loadMedicos = async () => {
     try {
       setLoading(true);
-      const result = await db.getAllAsync(
-        `SELECT * FROM medicos 
-         WHERE activo = 1 
-         AND latitud IS NOT NULL 
-         AND longitud IS NOT NULL
-         AND disponible = 1`
+      // Cargar médicos desde la tabla usuarios con rol 'medico'
+      const usuariosMedicos = await db.getAllAsync(
+        `SELECT * FROM usuarios 
+         WHERE rol = ? 
+         AND activo = 1`,
+        ['medico']
       );
-      setMedicos(result);
+      
+      // Cargar de la tabla medicos que tiene latitud/longitud
+      let medicosTabla = [];
+      try {
+        medicosTabla = await db.getAllAsync(
+          `SELECT * FROM medicos 
+           WHERE activo = 1 
+           AND disponible = 1`
+        );
+      } catch (e) {
+        console.log('Tabla medicos vacía o no existe');
+      }
+      
+      // Combinar: usar medicos de tabla medicos si tienen ubicación, sino usar usuarios
+      const todosMedicos = [];
+      
+      // Primero agregar médicos con ubicación de la tabla medicos
+      medicosTabla.forEach(m => {
+        if (m.latitud && m.longitud) {
+          todosMedicos.push({
+            id: m.id,
+            nombre: m.nombre,
+            email: m.email,
+            telefono: m.telefono,
+            especialidad: m.especialidad || 'Medicina General',
+            direccion: m.direccion || '',
+            ciudad: m.ciudad || '',
+            latitud: m.latitud,
+            longitud: m.longitud,
+            disponible: m.disponible,
+            calificacion: m.calificacion || 0,
+            fotoPerfil: m.fotoPerfil || '',
+            firebaseUid: m.firebaseUid,
+            activo: m.activo
+          });
+        }
+      });
+      
+      // Agregar médicos de usuarios que no estén ya en la lista
+      usuariosMedicos.forEach(u => {
+        if (!todosMedicos.find(med => med.firebaseUid === u.firebaseUid)) {
+          // Buscar si tiene ubicación en tabla medicos
+          const medicoConUbicacion = medicosTabla.find(m => m.firebaseUid === u.firebaseUid);
+          todosMedicos.push({
+            id: u.id,
+            nombre: u.nombre,
+            email: u.email,
+            telefono: u.telefono,
+            especialidad: 'Medicina General',
+            direccion: u.direccion || '',
+            ciudad: u.ciudad || '',
+            latitud: medicoConUbicacion?.latitud || null,
+            longitud: medicoConUbicacion?.longitud || null,
+            disponible: 1,
+            calificacion: 0,
+            fotoPerfil: u.fotoPerfil || '',
+            firebaseUid: u.firebaseUid,
+            activo: u.activo
+          });
+        }
+      });
+      
+      // Filtrar solo los que tienen ubicación
+      const medicosConUbicacion = todosMedicos.filter(m => m.latitud && m.longitud);
+      
+      setMedicos(medicosConUbicacion);
     } catch (error) {
       console.error('Error cargando médicos:', error);
       Alert.alert('Error', 'No se pudieron cargar los médicos');

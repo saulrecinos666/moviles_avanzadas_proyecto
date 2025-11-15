@@ -8,13 +8,18 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useUser } from '../context/UserContext';
+import { useSQLiteContext } from 'expo-sqlite';
+import { loadUserFromSQLite, saveUserToSQLite } from '../db/userHelper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LoginScreen = ({ navigation }) => {
-  const { login, loading } = useUser();
+  const { login, loading, user, resetPassword } = useUser();
+  const db = useSQLiteContext();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -22,6 +27,8 @@ const LoginScreen = ({ navigation }) => {
   const [passwordError, setPasswordError] = useState('');
   const [emailTouched, setEmailTouched] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
 
   const validateEmail = (emailValue) => {
     if (!emailValue) {
@@ -93,6 +100,47 @@ const LoginScreen = ({ navigation }) => {
 
     const resultado = await login(email, password);
     if (resultado.success) {
+      // Intentar cargar usuario desde SQLite y sincronizar
+      try {
+        const sqliteUser = await loadUserFromSQLite(db, resultado.user.uid);
+        if (sqliteUser && sqliteUser.rol) {
+          // Si existe en SQLite, actualizar AsyncStorage con el rol
+          const userData = await AsyncStorage.getItem('userData');
+          if (userData) {
+            const parsedData = JSON.parse(userData);
+            parsedData.rol = sqliteUser.rol;
+            await AsyncStorage.setItem('userData', JSON.stringify(parsedData));
+          }
+        } else if (resultado.user) {
+          // Si no existe en SQLite, crearlo
+          await saveUserToSQLite(db, resultado.user, {
+            nombre: resultado.user.displayName || email.split('@')[0],
+            email: email,
+            rol: 'paciente'
+          });
+          
+          // También asegurarse de que esté en Firestore
+          try {
+            const { firestore } = require('../config/firebase');
+            if (firestore) {
+              await firestore.collection('usuarios').doc(resultado.user.uid).set({
+                firebaseUid: resultado.user.uid,
+                email: resultado.user.email,
+                nombre: resultado.user.displayName || email.split('@')[0],
+                rol: 'paciente',
+                activo: true,
+                fechaRegistro: new Date().toISOString()
+              }, { merge: true });
+            }
+          } catch (firestoreError) {
+            console.error('Error guardando en Firestore:', firestoreError);
+          }
+        }
+      } catch (error) {
+        console.error('Error al sincronizar con SQLite:', error);
+        // No bloqueamos el login si falla SQLite
+      }
+      
       navigation.replace('Main');
     } else {
       const errorMessage = getErrorMessage(resultado.error?.code || resultado.error);
@@ -224,10 +272,104 @@ const LoginScreen = ({ navigation }) => {
           
           <TouchableOpacity 
             style={styles.forgotPasswordButton}
-            onPress={() => Alert.alert('Info', 'Función de recuperación de contraseña próximamente')}
+            onPress={() => {
+              setResetEmail(email); // Pre-llenar con el email del login
+              setShowForgotPassword(true);
+            }}
           >
             <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
           </TouchableOpacity>
+          
+          {/* Modal de Recuperación de Contraseña */}
+          <Modal
+            visible={showForgotPassword}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowForgotPassword(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <MaterialCommunityIcons name="lock-reset" size={32} color="#2196F3" />
+                  <Text style={styles.modalTitle}>Recuperar Contraseña</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Ingresa tu email y te enviaremos un enlace para restablecer tu contraseña
+                  </Text>
+                </View>
+                
+                <View style={styles.modalBody}>
+                  <View style={styles.inputContainer}>
+                    <MaterialCommunityIcons name="email" size={20} color="#666" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Email"
+                      value={resetEmail}
+                      onChangeText={setResetEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      placeholderTextColor="#999"
+                    />
+                  </View>
+                  
+                  <TouchableOpacity
+                    style={[styles.resetButton, loading && styles.resetButtonDisabled]}
+                    onPress={async () => {
+                      if (!resetEmail) {
+                        Alert.alert('Error', 'Por favor ingresa tu email');
+                        return;
+                      }
+                      
+                      const emailErr = validateEmail(resetEmail);
+                      if (emailErr) {
+                        Alert.alert('Error', emailErr);
+                        return;
+                      }
+                      
+                      const resultado = await resetPassword(resetEmail);
+                      if (resultado.success) {
+                        Alert.alert(
+                          'Email Enviado',
+                          'Se ha enviado un enlace de recuperación a tu email. Revisa tu bandeja de entrada y sigue las instrucciones.',
+                          [
+                            {
+                              text: 'OK',
+                              onPress: () => {
+                                setShowForgotPassword(false);
+                                setResetEmail('');
+                              }
+                            }
+                          ]
+                        );
+                      } else {
+                        Alert.alert('Error', resultado.error?.message || 'No se pudo enviar el email de recuperación');
+                      }
+                    }}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name="send" size={20} color="#FFFFFF" />
+                        <Text style={styles.resetButtonText}>Enviar Email</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => {
+                      setShowForgotPassword(false);
+                      setResetEmail('');
+                    }}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancelar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
           
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
@@ -397,6 +539,80 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 10,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 25,
+    width: '85%',
+    maxWidth: 400,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 10,
+    marginBottom: 5,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 5,
+  },
+  modalBody: {
+    marginTop: 10,
+  },
+  modalInput: {
+    flex: 1,
+    height: 50,
+    fontSize: 16,
+    color: '#333',
+    paddingLeft: 10,
+  },
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2196F3',
+    padding: 15,
+    borderRadius: 12,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  resetButtonDisabled: {
+    backgroundColor: '#BBDEFB',
+    opacity: 0.6,
+  },
+  resetButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  cancelButton: {
+    alignItems: 'center',
+    padding: 10,
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

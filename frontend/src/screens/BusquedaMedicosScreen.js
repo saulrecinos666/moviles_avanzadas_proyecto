@@ -51,12 +51,56 @@ const BusquedaMedicosScreen = ({ navigation }) => {
   const loadMedicos = async () => {
     try {
       setLoading(true);
-      // Cargar médicos desde SQLite
-      const result = await db.getAllAsync(
-        'SELECT * FROM medicos WHERE activo = 1 ORDER BY calificacion DESC'
+      // Cargar médicos desde la tabla usuarios con rol 'medico'
+      const usuariosMedicos = await db.getAllAsync(
+        'SELECT * FROM usuarios WHERE rol = ? AND activo = 1',
+        ['medico']
       );
-      setMedicos(result);
-      setMedicosFiltrados(result);
+      
+      // También intentar cargar de la tabla medicos (por compatibilidad)
+      let medicosTabla = [];
+      try {
+        medicosTabla = await db.getAllAsync(
+          'SELECT * FROM medicos WHERE activo = 1'
+        );
+      } catch (e) {
+        console.log('Tabla medicos vacía o no existe');
+      }
+      
+      // Combinar y mapear usuarios médicos al formato esperado
+      const medicosMapeados = usuariosMedicos.map(u => ({
+        id: u.id,
+        nombre: u.nombre,
+        email: u.email,
+        telefono: u.telefono,
+        especialidad: 'Medicina General', // Valor por defecto
+        subespecialidad: null,
+        numeroLicencia: null,
+        experiencia: null,
+        idiomas: 'Español',
+        direccion: u.direccion || '',
+        ciudad: u.ciudad || '',
+        disponible: 1,
+        calificacion: 0,
+        totalCalificaciones: 0,
+        fotoPerfil: u.fotoPerfil || '',
+        biografia: null,
+        precioConsulta: null,
+        fechaRegistro: u.fechaRegistro,
+        firebaseUid: u.firebaseUid,
+        activo: u.activo
+      }));
+      
+      // Combinar con médicos de la tabla medicos (evitar duplicados)
+      const todosMedicos = [...medicosMapeados];
+      medicosTabla.forEach(m => {
+        if (!todosMedicos.find(med => med.firebaseUid === m.firebaseUid)) {
+          todosMedicos.push(m);
+        }
+      });
+      
+      setMedicos(todosMedicos);
+      setMedicosFiltrados(todosMedicos);
     } catch (error) {
       console.error('Error cargando médicos:', error);
       Alert.alert('Error', 'No se pudieron cargar los médicos');
@@ -107,10 +151,7 @@ const BusquedaMedicosScreen = ({ navigation }) => {
   };
 
   const renderMedico = ({ item }) => (
-    <TouchableOpacity
-      style={styles.medicoCard}
-      onPress={() => navigation.navigate('DetalleMedico', { medico: item })}
-    >
+    <View style={styles.medicoCard}>
       <View style={styles.medicoHeader}>
         <View style={styles.medicoInfo}>
           <Text style={styles.medicoNombre}>{item.nombre}</Text>
@@ -145,14 +186,30 @@ const BusquedaMedicosScreen = ({ navigation }) => {
         <Text style={styles.precioText}>
           ${item.precioConsulta ? item.precioConsulta.toFixed(2) : 'N/A'}
         </Text>
-        <TouchableOpacity
-          style={styles.verPerfilButton}
-          onPress={() => navigation.navigate('DetalleMedico', { medico: item })}
-        >
-          <Text style={styles.verPerfilText}>Ver Perfil</Text>
-        </TouchableOpacity>
+        <View style={styles.medicoActions}>
+          <TouchableOpacity
+            style={styles.chatButton}
+            onPress={() => {
+              // Navegar a conversaciones y abrir chat con el médico
+              navigation.navigate('Conversaciones', { abrirChatCon: item });
+            }}
+          >
+            <MaterialCommunityIcons name="message-text" size={18} color="#9C27B0" />
+            <Text style={styles.chatButtonText}>Chat</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.agendarButton}
+            onPress={() => {
+              // Navegar a agendar cita con el médico seleccionado
+              navigation.navigate('AgendarCita', { medico: item });
+            }}
+          >
+            <MaterialCommunityIcons name="calendar-check" size={18} color="#fff" />
+            <Text style={styles.agendarButtonText}>Agendar Cita</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
   if (loading) {
@@ -418,13 +475,34 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2196F3',
   },
-  verPerfilButton: {
-    backgroundColor: '#2196F3',
-    paddingHorizontal: 20,
+  medicoActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  chatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3E5F5',
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
+    gap: 6,
   },
-  verPerfilText: {
+  chatButtonText: {
+    color: '#9C27B0',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  agendarButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  agendarButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',

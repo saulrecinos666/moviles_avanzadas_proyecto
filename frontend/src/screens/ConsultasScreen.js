@@ -12,40 +12,101 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useUser } from '../context/UserContext';
+import RoleService from '../services/RoleService';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useFocusEffect } from '@react-navigation/native';
 
 const ConsultasScreen = ({ navigation }) => {
   const db = useSQLiteContext();
   const { user } = useUser();
+  const userRole = user?.rol || 'paciente';
   const [consultas, setConsultas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('todas'); // todas, programada, completada, cancelada
 
   useEffect(() => {
-    loadConsultas();
-  }, []);
+    // Validar permisos
+    if (!RoleService.canPerformAction(userRole, 'ver_consultas_propias')) {
+      Alert.alert(
+        'Acceso Denegado',
+        'No tienes permisos para ver consultas.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              const redirectScreen = RoleService.isAdmin(userRole) 
+                ? 'DashboardAdmin' 
+                : RoleService.isMedico(userRole) 
+                ? 'DashboardMedico' 
+                : 'Dashboard';
+              navigation.replace(redirectScreen);
+            }
+          }
+        ]
+      );
+      return;
+    }
+  }, [userRole]);
+
+  // Recargar consultas cuando la pantalla recibe el foco
+  useFocusEffect(
+    React.useCallback(() => {
+      if (RoleService.canPerformAction(userRole, 'ver_consultas_propias')) {
+        loadConsultas();
+      }
+    }, [userRole])
+  );
 
   const loadConsultas = async () => {
     try {
       setLoading(true);
-      const result = await db.getAllAsync(
-        `SELECT c.*, m.nombre as medicoNombre, m.especialidad, m.fotoPerfil as medicoFoto
+      // Intentar primero con JOIN a usuarios y medicos
+      // La especialidad está en la tabla medicos o en la consulta misma
+      let result = await db.getAllAsync(
+        `SELECT c.*, 
+                COALESCE(u.nombre, m.nombre, 'Médico') as medicoNombre, 
+                COALESCE(m.especialidad, c.especialidad, 'Medicina General') as especialidad, 
+                COALESCE(u.fotoPerfil, m.fotoPerfil) as medicoFoto
          FROM consultas c
-         JOIN medicos m ON c.medicoId = m.id
+         LEFT JOIN usuarios u ON c.medicoId = u.id AND u.rol = 'medico'
+         LEFT JOIN medicos m ON c.medicoId = m.id
          WHERE c.pacienteId = ?
          ORDER BY c.fecha DESC, c.hora DESC`,
         [user.id]
       );
-      setConsultas(result);
+      
+      setConsultas(result || []);
     } catch (error) {
       console.error('Error cargando consultas:', error);
-      Alert.alert('Error', 'No se pudieron cargar las consultas');
+      // Intentar consulta más simple sin JOINs si falla
+      try {
+        const resultSimple = await db.getAllAsync(
+          `SELECT c.*, 
+                  c.especialidad as especialidad,
+                  'Médico' as medicoNombre
+           FROM consultas c
+           WHERE c.pacienteId = ?
+           ORDER BY c.fecha DESC, c.hora DESC`,
+          [user.id]
+        );
+        setConsultas(resultSimple || []);
+      } catch (e) {
+        console.error('Error en consulta simple:', e);
+        Alert.alert('Error', 'No se pudieron cargar las consultas');
+        setConsultas([]);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const cancelarConsulta = async (consultaId) => {
+    // Validar permisos
+    if (!RoleService.canPerformAction(userRole, 'ver_consultas_propias')) {
+      Alert.alert('Error', 'No tienes permisos para cancelar consultas');
+      return;
+    }
+
     Alert.alert(
       'Cancelar Consulta',
       '¿Estás seguro de que deseas cancelar esta consulta?',
@@ -110,7 +171,10 @@ const ConsultasScreen = ({ navigation }) => {
     return (
       <TouchableOpacity
         style={styles.consultaCard}
-        onPress={() => navigation.navigate('DetalleConsulta', { consulta: item })}
+        onPress={() => {
+          // Navegar directamente al DetalleConsulta (ahora está en el Tab Navigator)
+          navigation.navigate('DetalleConsulta', { consulta: item });
+        }}
       >
         <View style={styles.consultaHeader}>
           <View style={styles.medicoInfo}>
@@ -150,7 +214,10 @@ const ConsultasScreen = ({ navigation }) => {
           {item.estado === 'programada' && (
             <TouchableOpacity
               style={styles.cancelButton}
-              onPress={() => cancelarConsulta(item.id)}
+              onPress={(e) => {
+                e.stopPropagation();
+                cancelarConsulta(item.id);
+              }}
             >
               <MaterialCommunityIcons name="close-circle" size={20} color="#F44336" />
               <Text style={styles.cancelButtonText}>Cancelar</Text>
@@ -159,7 +226,10 @@ const ConsultasScreen = ({ navigation }) => {
           {item.estado === 'completada' && !item.calificacion && (
             <TouchableOpacity
               style={styles.rateButton}
-              onPress={() => calificarConsulta(item.id)}
+              onPress={(e) => {
+                e.stopPropagation();
+                calificarConsulta(item.id);
+              }}
             >
               <MaterialCommunityIcons name="star" size={20} color="#FFA500" />
               <Text style={styles.rateButtonText}>Calificar</Text>
@@ -168,7 +238,10 @@ const ConsultasScreen = ({ navigation }) => {
           {item.estado === 'completada' && (
             <TouchableOpacity
               style={styles.verRecetaButton}
-              onPress={() => navigation.navigate('Recetas', { consultaId: item.id })}
+              onPress={(e) => {
+                e.stopPropagation();
+                navigation.navigate('Recetas', { consultaId: item.id });
+              }}
             >
               <MaterialCommunityIcons name="file-document" size={20} color="#2196F3" />
               <Text style={styles.verRecetaText}>Ver Receta</Text>

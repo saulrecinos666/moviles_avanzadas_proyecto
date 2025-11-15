@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "SistemaClinicaPediatrica",
-    "slug": "SistemaClinicaPediatrica",
+    "name": "MiCitaRemota",
+    "slug": "mi-cita-remota",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/MiCitaRemota.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -15,7 +15,7 @@
       "supportsTablet": true
     },
     "android": {
-      "isNewArchEnabled": false, 
+      "isNewArchEnabled": false,
       "splash": {
         "backgroundColor": "#ffffff"
       },
@@ -24,7 +24,7 @@
       },
       "package": "com.sistemasaludbienestar.app",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/MiCitaRemota.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -57,8 +57,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "ccc97ffa-dc6c-4917-aa8d-9c4c855745a1"
+        "projectId": "95054f53-1c50-4e9f-aeb5-910f92bf3cbd"
       }
-    }
+    },
+    "owner": "saul6666"
   }
 }

@@ -14,16 +14,29 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useUser } from '../context/UserContext';
 import { database } from '../config/firebase';
+import RoleService from '../services/RoleService';
 
 const ChatScreen = ({ navigation, route }) => {
   const db = useSQLiteContext();
   const { user } = useUser();
+  const userRole = user?.rol || 'paciente';
   const medico = route?.params?.medico;
+  const paciente = route?.params?.paciente;
   const [mensajes, setMensajes] = useState([]);
   const [nuevoMensaje, setNuevoMensaje] = useState('');
   const [loading, setLoading] = useState(true);
   const flatListRef = useRef(null);
-  const conversacionId = medico ? `${user.firebaseUid}_${medico.firebaseUid}` : null;
+  
+  // Determinar el contacto según el rol
+  const contacto = RoleService.isMedico(userRole) ? paciente : medico;
+  // Generar conversacionId de forma consistente (siempre menor_id_mayor_id)
+  const generarConversacionId = (id1, id2) => {
+    const ids = [id1, id2].sort();
+    return `${ids[0]}_${ids[1]}`;
+  };
+  const conversacionId = contacto 
+    ? generarConversacionId(user.id || user.firebaseUid, contacto.id || contacto.firebaseUid)
+    : null;
 
   useEffect(() => {
     if (conversacionId) {
@@ -40,6 +53,51 @@ const ChatScreen = ({ navigation, route }) => {
   const loadMensajes = async () => {
     try {
       setLoading(true);
+      
+      // Primero sincronizar desde Firebase
+      try {
+        const mensajesRef = database.ref(`conversaciones/${conversacionId}/mensajes`);
+        const snapshot = await mensajesRef.once('value');
+        const firebaseMensajes = snapshot.val();
+        
+        if (firebaseMensajes) {
+          const mensajesArray = Object.values(firebaseMensajes);
+          
+          // Guardar todos los mensajes de Firebase en SQLite
+          for (const msg of mensajesArray) {
+            try {
+              const existe = await db.getFirstAsync(
+                'SELECT id FROM mensajesChat WHERE firebaseMessageId = ?',
+                [msg.firebaseMessageId]
+              );
+              
+              if (!existe) {
+                await db.runAsync(
+                  `INSERT INTO mensajesChat (conversacionId, remitenteId, remitenteTipo, destinatarioId, destinatarioTipo, mensaje, tipo, leido, fechaEnvio, firebaseMessageId)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [
+                    msg.conversacionId,
+                    msg.remitenteId,
+                    msg.remitenteTipo,
+                    msg.destinatarioId,
+                    msg.destinatarioTipo,
+                    msg.mensaje,
+                    msg.tipo || 'texto',
+                    msg.leido || 0,
+                    msg.fechaEnvio,
+                    msg.firebaseMessageId
+                  ]
+                );
+              }
+            } catch (e) {
+              console.error('Error guardando mensaje individual:', e);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error sincronizando desde Firebase:', error);
+      }
+      
       // Cargar mensajes desde SQLite
       const result = await db.getAllAsync(
         `SELECT * FROM mensajesChat
@@ -47,19 +105,14 @@ const ChatScreen = ({ navigation, route }) => {
          ORDER BY fechaEnvio ASC`,
         [conversacionId]
       );
-      setMensajes(result);
+      setMensajes(result || []);
       
-      // También sincronizar con Firebase
-      if (conversacionId) {
-        const mensajesRef = database.ref(`conversaciones/${conversacionId}/mensajes`);
-        mensajesRef.on('value', (snapshot) => {
-          const firebaseMensajes = snapshot.val();
-          if (firebaseMensajes) {
-            const mensajesArray = Object.values(firebaseMensajes);
-            setMensajes(mensajesArray.sort((a, b) => a.timestamp - b.timestamp));
-          }
-        });
-      }
+      // Marcar mensajes como leídos
+      await db.runAsync(
+        `UPDATE mensajesChat SET leido = 1 
+         WHERE conversacionId = ? AND destinatarioId = ? AND leido = 0`,
+        [conversacionId, user.id || user.firebaseUid]
+      );
     } catch (error) {
       console.error('Error cargando mensajes:', error);
     } finally {
@@ -88,15 +141,21 @@ const ChatScreen = ({ navigation, route }) => {
   };
 
   const enviarMensaje = async () => {
-    if (!nuevoMensaje.trim() || !conversacionId) return;
+    if (!nuevoMensaje.trim() || !conversacionId || !contacto) return;
+
+    // Determinar tipos según el rol del usuario
+    const remitenteTipo = userRole;
+    const destinatarioTipo = RoleService.isMedico(userRole) ? 'paciente' : 'medico';
+    const remitenteId = user.id || user.firebaseUid;
+    const destinatarioId = contacto.id || contacto.firebaseUid;
 
     try {
       const mensaje = {
         conversacionId,
-        remitenteId: user.firebaseUid,
-        remitenteTipo: 'paciente',
-        destinatarioId: medico.firebaseUid,
-        destinatarioTipo: 'medico',
+        remitenteId,
+        remitenteTipo,
+        destinatarioId,
+        destinatarioTipo,
         mensaje: nuevoMensaje.trim(),
         tipo: 'texto',
         leido: 0,
@@ -105,7 +164,7 @@ const ChatScreen = ({ navigation, route }) => {
       };
 
       // Guardar en SQLite
-      await db.runAsync(
+      const result = await db.runAsync(
         `INSERT INTO mensajesChat (conversacionId, remitenteId, remitenteTipo, destinatarioId, destinatarioTipo, mensaje, tipo, leido, fechaEnvio)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -121,21 +180,35 @@ const ChatScreen = ({ navigation, route }) => {
         ]
       );
 
+      mensaje.id = result.lastInsertRowId;
+
       // Guardar en Firebase
       const mensajesRef = database.ref(`conversaciones/${conversacionId}/mensajes`);
       const nuevoMensajeRef = mensajesRef.push();
       await nuevoMensajeRef.set({
         ...mensaje,
-        id: nuevoMensajeRef.key,
         firebaseMessageId: nuevoMensajeRef.key
       });
 
+      // Actualizar SQLite con firebaseMessageId
+      await db.runAsync(
+        'UPDATE mensajesChat SET firebaseMessageId = ? WHERE id = ?',
+        [nuevoMensajeRef.key, mensaje.id]
+      );
+
       // Actualizar última conversación
-      await database.ref(`conversaciones/${conversacionId}`).update({
-        ultimoMensaje: mensaje.mensaje,
-        ultimoMensajeFecha: mensaje.fechaEnvio,
-        noLeidosMedico: (await database.ref(`conversaciones/${conversacionId}/noLeidosMedico`).once('value')).val() + 1 || 1
-      });
+      await db.runAsync(
+        `INSERT OR REPLACE INTO conversaciones (conversacionId, pacienteId, medicoId, ultimoMensaje, ultimoMensajeFecha, activa)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          conversacionId,
+          RoleService.isMedico(userRole) ? contacto.id : user.id,
+          RoleService.isMedico(userRole) ? user.id : contacto.id,
+          mensaje.mensaje,
+          mensaje.fechaEnvio,
+          1
+        ]
+      );
 
       setNuevoMensaje('');
       
@@ -149,7 +222,7 @@ const ChatScreen = ({ navigation, route }) => {
   };
 
   const renderMensaje = ({ item }) => {
-    const esMio = item.remitenteId === user.firebaseUid;
+    const esMio = item.remitenteId === (user.id || user.firebaseUid);
     const fecha = new Date(item.fechaEnvio);
     const hora = fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
@@ -167,17 +240,29 @@ const ChatScreen = ({ navigation, route }) => {
     );
   };
 
-  if (!medico) {
+  if (!contacto) {
     return (
       <View style={styles.container}>
         <View style={styles.emptyContainer}>
           <MaterialCommunityIcons name="message-outline" size={64} color="#ccc" />
-          <Text style={styles.emptyText}>Selecciona un médico para iniciar el chat</Text>
+          <Text style={styles.emptyText}>
+            {RoleService.isMedico(userRole) 
+              ? 'Selecciona un paciente para iniciar el chat' 
+              : 'Selecciona un médico para iniciar el chat'}
+          </Text>
           <TouchableOpacity
             style={styles.buscarButton}
-            onPress={() => navigation.navigate('BusquedaMedicos')}
+            onPress={() => {
+              if (RoleService.isMedico(userRole)) {
+                navigation.navigate('MisPacientes');
+              } else {
+                navigation.navigate('BusquedaMedicos');
+              }
+            }}
           >
-            <Text style={styles.buscarButtonText}>Buscar Médicos</Text>
+            <Text style={styles.buscarButtonText}>
+              {RoleService.isMedico(userRole) ? 'Ver Pacientes' : 'Buscar Médicos'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -195,8 +280,10 @@ const ChatScreen = ({ navigation, route }) => {
           <MaterialCommunityIcons name="arrow-left" size={24} color="#333" />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          <Text style={styles.headerNombre}>{medico.nombre}</Text>
-          <Text style={styles.headerEspecialidad}>{medico.especialidad}</Text>
+          <Text style={styles.headerNombre}>{contacto.nombre}</Text>
+          {contacto.especialidad && (
+            <Text style={styles.headerEspecialidad}>{contacto.especialidad}</Text>
+          )}
         </View>
       </View>
 

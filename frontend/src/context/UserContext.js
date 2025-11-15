@@ -15,10 +15,26 @@ export const UserProvider = ({ children }) => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          // Obtener datos adicionales del usuario desde AsyncStorage
+          // Primero intentar cargar desde AsyncStorage
           const userData = await AsyncStorage.getItem('userData');
           if (userData) {
-            setUser(JSON.parse(userData));
+            const parsedData = JSON.parse(userData);
+            // Si el usuario tiene firebaseUid, verificar que coincida
+            if (parsedData.id === firebaseUser.uid) {
+              setUser(parsedData);
+            } else {
+              // Si no coincide, crear nuevo usuario
+              const basicUserData = {
+                id: firebaseUser.uid,
+                email: firebaseUser.email,
+                nombre: firebaseUser.displayName || '',
+                fotoPerfil: firebaseUser.photoURL || '',
+                rol: 'paciente', // Por defecto paciente
+                fechaRegistro: new Date().toISOString()
+              };
+              setUser(basicUserData);
+              await AsyncStorage.setItem('userData', JSON.stringify(basicUserData));
+            }
           } else {
             // Crear datos básicos del usuario
             const basicUserData = {
@@ -126,13 +142,65 @@ export const UserProvider = ({ children }) => {
   const logout = async () => {
     try {
       setLoading(true);
-      await auth.signOut();
+      console.log('Iniciando logout...');
+      
+      // Primero limpiar AsyncStorage
       await AsyncStorage.removeItem('userData');
+      console.log('AsyncStorage limpiado');
+      
+      // Luego cerrar sesión en Firebase
+      await auth.signOut();
+      console.log('Firebase signOut completado');
+      
+      // Finalmente limpiar el estado del usuario
       setUser(null);
+      console.log('Usuario limpiado del estado');
+      
       return { success: true };
     } catch (error) {
-      console.log('Error al cerrar sesión:', error);
+      console.error('Error al cerrar sesión:', error);
+      // Aún así, limpiar el estado local
+      setUser(null);
+      await AsyncStorage.removeItem('userData').catch(() => {});
       return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPassword = async (email) => {
+    try {
+      setLoading(true);
+      await auth.sendPasswordResetEmail(email);
+      return { success: true };
+    } catch (error) {
+      console.log('Error al enviar email de recuperación:', error);
+      let errorMessage = 'Error al enviar el email de recuperación';
+      
+      switch (error.code) {
+        case 'auth/user-not-found':
+          errorMessage = 'No existe una cuenta con este email';
+          break;
+        case 'auth/invalid-email':
+          errorMessage = 'Email inválido';
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = 'Demasiados intentos. Intenta más tarde';
+          break;
+        case 'auth/network-request-failed':
+          errorMessage = 'Error de conexión. Verifica tu internet';
+          break;
+        default:
+          errorMessage = error.message || 'Error al enviar el email de recuperación';
+      }
+      
+      return { 
+        success: false, 
+        error: {
+          code: error.code,
+          message: errorMessage
+        }
+      };
     } finally {
       setLoading(false);
     }
@@ -155,6 +223,22 @@ export const UserProvider = ({ children }) => {
       return { success: true, user: updatedUserData };
     } catch (error) {
       console.log('Error al actualizar usuario:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Función para recargar el usuario desde AsyncStorage (útil después de cambios de rol)
+  const reloadUser = async () => {
+    try {
+      const userData = await AsyncStorage.getItem('userData');
+      if (userData) {
+        const parsedData = JSON.parse(userData);
+        setUser(parsedData);
+        return { success: true, user: parsedData };
+      }
+      return { success: false, error: 'No hay datos de usuario' };
+    } catch (error) {
+      console.log('Error al recargar usuario:', error);
       return { success: false, error: error.message };
     }
   };
@@ -190,7 +274,9 @@ export const UserProvider = ({ children }) => {
       register,
       login,
       logout,
-      updateUser
+      updateUser,
+      reloadUser,
+      resetPassword
     }}>
       {children}
     </UserContext.Provider>

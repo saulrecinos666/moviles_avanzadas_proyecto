@@ -197,8 +197,19 @@ const PerfilScreen = ({ navigation }) => {
           text: 'Cerrar Sesión',
           style: 'destructive',
           onPress: async () => {
-            const resultado = await logout();
-            if (!resultado.success) {
+            try {
+              const resultado = await logout();
+              if (resultado.success) {
+                // Navegar a Login después de cerrar sesión
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                });
+              } else {
+                Alert.alert('Error', 'No se pudo cerrar sesión: ' + (resultado.error || 'Error desconocido'));
+              }
+            } catch (error) {
+              console.error('Error en handleLogout:', error);
               Alert.alert('Error', 'No se pudo cerrar sesión');
             }
           }

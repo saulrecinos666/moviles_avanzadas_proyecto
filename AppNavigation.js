@@ -1,9 +1,12 @@
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useUser } from './frontend/src/context/UserContext';
 import RoleService from './frontend/src/services/RoleService';
+import { useSQLiteContext } from 'expo-sqlite';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { loadUserFromSQLite } from './frontend/src/db/userHelper';
 
 // Importar las pantallas de servicios médicos
 import DashboardScreen from "./frontend/src/screens/DashboardScreen";
@@ -28,6 +31,8 @@ import DashboardAdminScreen from "./frontend/src/screens/admin/DashboardAdminScr
 import GestionUsuariosScreen from "./frontend/src/screens/admin/GestionUsuariosScreen";
 import GestionMedicosScreen from "./frontend/src/screens/admin/GestionMedicosScreen";
 import ReportesScreen from "./frontend/src/screens/admin/ReportesScreen";
+import ConversacionesScreen from "./frontend/src/screens/ConversacionesScreen";
+import DetalleConsultaScreen from "./frontend/src/screens/DetalleConsultaScreen";
 
 const Drawer = createDrawerNavigator();
 const Tab = createBottomTabNavigator();
@@ -102,10 +107,10 @@ const AppDrawer = () => {
                 }}
             />
             <Drawer.Screen 
-                name="Chat" 
-                component={ChatScreen}
+                name="Conversaciones" 
+                component={ConversacionesScreen}
                 options={{
-                    title: 'Chat con Médicos',
+                    title: 'Mensajes',
                     drawerIcon: ({ color, size }) => (
                         <MaterialCommunityIcons name="message-text" size={size} color={color} />
                     ),
@@ -178,10 +183,10 @@ const AppDrawer = () => {
                 }}
             />
             <Drawer.Screen 
-                name="Chat" 
-                component={ChatScreen}
+                name="Conversaciones" 
+                component={ConversacionesScreen}
                 options={{
-                    title: 'Chat con Pacientes',
+                    title: 'Mensajes',
                     drawerIcon: ({ color, size }) => (
                         <MaterialCommunityIcons name="message-text" size={size} color={color} />
                     ),
@@ -252,8 +257,38 @@ const AppDrawer = () => {
 };
 
 const AppTabs = () => {
-  const { user } = useUser();
+  const { user, reloadUser } = useUser();
+  const db = useSQLiteContext();
   const userRole = user?.rol || 'paciente';
+
+  // Sincronizar rol desde SQLite cuando la app carga
+  useEffect(() => {
+    const syncRoleFromSQLite = async () => {
+      if (user?.id && db) {
+        try {
+          const sqliteUser = await loadUserFromSQLite(db, user.id);
+          console.log('AppTabs - Sincronizando rol. SQLite:', sqliteUser?.rol, 'AsyncStorage:', user.rol);
+          if (sqliteUser && sqliteUser.rol && sqliteUser.rol !== user.rol) {
+            // Si el rol en SQLite es diferente, actualizar AsyncStorage
+            const userData = await AsyncStorage.getItem('userData');
+            if (userData) {
+              const parsedData = JSON.parse(userData);
+              parsedData.rol = sqliteUser.rol;
+              await AsyncStorage.setItem('userData', JSON.stringify(parsedData));
+              await reloadUser();
+              console.log('AppTabs - Rol actualizado a:', sqliteUser.rol);
+            }
+          }
+        } catch (error) {
+          console.error('Error al sincronizar rol en AppTabs:', error);
+        }
+      }
+    };
+    
+    if (user?.id) {
+      syncRoleFromSQLite();
+    }
+  }, [user?.id, user?.rol, db, reloadUser]);
 
   return (
     <Tab.Navigator screenOptions={{
@@ -315,13 +350,13 @@ const AppTabs = () => {
               }}
           />
           <Tab.Screen 
-              name='Chat' 
-              component={ChatScreen} 
+              name='Conversaciones' 
+              component={ConversacionesScreen} 
               options={{
                   tabBarIcon: ({color, size}) => (
                       <MaterialCommunityIcons name="message-text" size={size} color={color} />
                   ),
-                  title: 'Chat'
+                  title: 'Mensajes'
               }}
           />
           <Tab.Screen 
@@ -333,6 +368,25 @@ const AppTabs = () => {
                   ),
                   title: 'Mapa'
               }}
+          />
+          {/* Pantalla oculta para DetalleConsulta */}
+          <Tab.Screen 
+              name='DetalleConsulta' 
+              component={DetalleConsultaScreen} 
+              options={{
+                  tabBarButton: () => null,
+                  tabBarItemStyle: { display: 'none', height: 0, width: 0 },
+                  tabBarLabel: '',
+                  headerShown: true,
+                  title: 'Detalle de Consulta',
+                  headerStyle: { backgroundColor: '#2196F3' },
+                  headerTintColor: '#FFFFFF'
+              }}
+              listeners={{
+                  tabPress: (e) => {
+                    e.preventDefault();
+                  },
+                }}
           />
         </>
       )}
@@ -381,14 +435,33 @@ const AppTabs = () => {
               }}
           />
           <Tab.Screen 
-              name='Chat' 
-              component={ChatScreen} 
+              name='Conversaciones' 
+              component={ConversacionesScreen} 
               options={{
                   tabBarIcon: ({color, size}) => (
                       <MaterialCommunityIcons name="message-text" size={size} color={color} />
                   ),
-                  title: 'Chat'
+                  title: 'Mensajes'
               }}
+          />
+          {/* Pantalla oculta para DetalleConsulta */}
+          <Tab.Screen 
+              name='DetalleConsulta' 
+              component={DetalleConsultaScreen} 
+              options={{
+                  tabBarButton: () => null,
+                  tabBarItemStyle: { display: 'none', height: 0, width: 0 },
+                  tabBarLabel: '',
+                  headerShown: true,
+                  title: 'Detalle de Consulta',
+                  headerStyle: { backgroundColor: '#2196F3' },
+                  headerTintColor: '#FFFFFF'
+              }}
+              listeners={{
+                  tabPress: (e) => {
+                    e.preventDefault();
+                  },
+                }}
           />
         </>
       )}

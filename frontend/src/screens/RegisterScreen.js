@@ -13,10 +13,13 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useUser } from '../context/UserContext';
+import { useSQLiteContext } from 'expo-sqlite';
+import { saveUserToSQLite } from '../db/userHelper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 const RegisterScreen = ({ navigation }) => {
   const { register, loading } = useUser();
+  const db = useSQLiteContext();
   const [formData, setFormData] = useState({
     nombre: '',
     email: '',
@@ -126,7 +129,22 @@ const RegisterScreen = ({ navigation }) => {
     };
 
     const resultado = await register(formData.email, formData.password, userData);
-    if (resultado.success) {
+    if (resultado.success && resultado.user) {
+      // Guardar usuario en SQLite
+      try {
+        // Crear objeto firebaseUser simulado para saveUserToSQLite
+        const firebaseUser = {
+          uid: resultado.user.id,
+          email: resultado.user.email,
+          displayName: resultado.user.nombre,
+          photoURL: resultado.user.fotoPerfil || ''
+        };
+        await saveUserToSQLite(db, firebaseUser, userData);
+      } catch (error) {
+        console.error('Error al guardar usuario en SQLite:', error);
+        // No bloqueamos el registro si falla SQLite, ya que Firebase es lo principal
+      }
+      
       Alert.alert('Éxito', 'Cuenta creada correctamente', [
         { text: 'OK', onPress: () => navigation.replace('Main') }
       ]);

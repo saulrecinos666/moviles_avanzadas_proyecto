@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -13,49 +14,103 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useUser } from '../context/UserContext';
+import RoleService from '../services/RoleService';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 
 const RecetasScreen = ({ navigation, route }) => {
   const db = useSQLiteContext();
   const { user } = useUser();
+  const userRole = user?.rol || 'paciente';
   const [recetas, setRecetas] = useState([]);
   const [loading, setLoading] = useState(true);
   const consultaId = route?.params?.consultaId;
 
   useEffect(() => {
-    loadRecetas();
-  }, [consultaId]);
+    // Validar permisos
+    if (!RoleService.canPerformAction(userRole, 'ver_recetas_propias')) {
+      Alert.alert(
+        'Acceso Denegado',
+        'No tienes permisos para ver recetas.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              const redirectScreen = RoleService.isAdmin(userRole) 
+                ? 'DashboardAdmin' 
+                : RoleService.isMedico(userRole) 
+                ? 'DashboardMedico' 
+                : 'Dashboard';
+              navigation.replace(redirectScreen);
+            }
+          }
+        ]
+      );
+      return;
+    }
+  }, [userRole]);
+
+  // Recargar recetas cuando la pantalla recibe foco
+  useFocusEffect(
+    React.useCallback(() => {
+      if (RoleService.canPerformAction(userRole, 'ver_recetas_propias')) {
+        loadRecetas();
+      }
+    }, [consultaId, userRole])
+  );
 
   const loadRecetas = async () => {
     try {
       setLoading(true);
       let result;
+      
+      // Obtener el pacienteId correcto (puede ser id numérico o firebaseUid string)
+      const pacienteUsuario = await db.getFirstAsync(
+        'SELECT id, firebaseUid FROM usuarios WHERE (firebaseUid = ? OR email = ?) AND rol = ?',
+        [user.id, user.email, 'paciente']
+      );
+      
+      if (!pacienteUsuario) {
+        setRecetas([]);
+        setLoading(false);
+        return;
+      }
+      
+      // Buscar recetas usando tanto id como firebaseUid
       if (consultaId) {
         result = await db.getAllAsync(
-          `SELECT r.*, m.nombre as medicoNombre, m.especialidad, c.fecha as fechaConsulta
+          `SELECT r.*, 
+                  COALESCE(u.nombre, m.nombre) as medicoNombre, 
+                  COALESCE(m.especialidad, 'Medicina General') as especialidad, 
+                  c.fecha as fechaConsulta
            FROM recetas r
-           JOIN medicos m ON r.medicoId = m.id
+           LEFT JOIN usuarios u ON r.medicoId = u.id AND u.rol = 'medico'
+           LEFT JOIN medicos m ON r.medicoId = m.id
            JOIN consultas c ON r.consultaId = c.id
-           WHERE r.pacienteId = ? AND r.consultaId = ?
+           WHERE (r.pacienteId = ? OR r.pacienteId = ?) AND r.consultaId = ?
            ORDER BY r.fechaEmision DESC`,
-          [user.id, consultaId]
+          [pacienteUsuario.id, pacienteUsuario.firebaseUid, consultaId]
         );
       } else {
         result = await db.getAllAsync(
-          `SELECT r.*, m.nombre as medicoNombre, m.especialidad, c.fecha as fechaConsulta
+          `SELECT r.*, 
+                  COALESCE(u.nombre, m.nombre) as medicoNombre, 
+                  COALESCE(m.especialidad, 'Medicina General') as especialidad, 
+                  c.fecha as fechaConsulta
            FROM recetas r
-           JOIN medicos m ON r.medicoId = m.id
+           LEFT JOIN usuarios u ON r.medicoId = u.id AND u.rol = 'medico'
+           LEFT JOIN medicos m ON r.medicoId = m.id
            JOIN consultas c ON r.consultaId = c.id
-           WHERE r.pacienteId = ?
+           WHERE r.pacienteId = ? OR r.pacienteId = ?
            ORDER BY r.fechaEmision DESC`,
-          [user.id]
+          [pacienteUsuario.id, pacienteUsuario.firebaseUid]
         );
       }
-      setRecetas(result);
+      setRecetas(result || []);
     } catch (error) {
       console.error('Error cargando recetas:', error);
       Alert.alert('Error', 'No se pudieron cargar las recetas');
+      setRecetas([]);
     } finally {
       setLoading(false);
     }

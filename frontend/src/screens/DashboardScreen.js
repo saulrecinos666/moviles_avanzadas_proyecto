@@ -134,7 +134,7 @@ const DashboardScreen = ({ navigation }) => {
         
         <TouchableOpacity 
           style={styles.statCard}
-          onPress={() => navigation.navigate('Chat')}
+          onPress={() => navigation.navigate('Conversaciones')}
         >
           <MaterialCommunityIcons name="message-text" size={28} color="#9C27B0" />
           <Text style={styles.statNumber}>{stats.mensajesNoLeidos}</Text>
@@ -152,7 +152,7 @@ const DashboardScreen = ({ navigation }) => {
           <Text style={styles.proximaConsultaText}>No tienes consultas programadas</Text>
           <TouchableOpacity
             style={styles.agendarButton}
-            onPress={() => navigation.navigate('BusquedaMedicos')}
+            onPress={() => navigation.navigate('AgendarCita')}
           >
             <Text style={styles.agendarButtonText}>Agendar Consulta</Text>
           </TouchableOpacity>

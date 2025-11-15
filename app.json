@@ -58,6 +58,10 @@
     "plugins": [
       "expo-sqlite",
       [
+        "expo-sqlite",
+        {
+          "supportsWeb": false
+        },
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Esta app necesita acceso a tu ubicación para mostrarte los médicos cercanos.",

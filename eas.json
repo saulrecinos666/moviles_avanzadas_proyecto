@@ -6,7 +6,17 @@
     "build": {
        "development": {
        "developmentClient": true,
-       "distribution": "internal"
+       "distribution": "internal",
+       "env": {
+       "EXPO_ENABLE_NEW_ARCHITECTURE": "false"
+       },
+       "android": {
+       "buildType": "apk", 
+       "withoutCredentials": true
+       },
+       "cache": {
+       "disabled": true
+       }
       },
         "preview": {
         "distribution": "internal",

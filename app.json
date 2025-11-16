@@ -90,7 +90,10 @@
     "owner": "saulbatres",
     "runtimeVersion": "51.0.0",
     "updates": {
-      "enabled": false
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/1db51e5b-ed58-41b9-aab4-5f40f2fdd098"
     }
   }
 }

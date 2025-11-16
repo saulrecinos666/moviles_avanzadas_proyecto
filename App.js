@@ -14,7 +14,6 @@ import { initializeDatabase } from './frontend/src/db/database';
 import { useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import * as Updates from 'expo-updates';
 
 const Stack = createNativeStackNavigator();
 
@@ -61,11 +60,26 @@ const App = () => {
   useEffect(() => {
     clearCacheOnVersionUpdate();
     
-    // Verificar y aplicar updates automáticamente
+    // Verificar y aplicar updates automáticamente (solo si el módulo está disponible)
     const checkForUpdates = async () => {
       try {
         if (__DEV__) {
           // En desarrollo, no verificar updates
+          return;
+        }
+        
+        // Verificar si el módulo de updates está disponible
+        let Updates;
+        try {
+          Updates = require('expo-updates');
+        } catch (e) {
+          // Módulo no disponible, salir silenciosamente
+          console.log('Updates module not available');
+          return;
+        }
+        
+        if (!Updates.isEnabled) {
+          console.log('Updates no están habilitados');
           return;
         }
         
@@ -79,7 +93,8 @@ const App = () => {
           console.log('✅ App está actualizada');
         }
       } catch (error) {
-        console.error('Error al verificar updates:', error);
+        // Ignorar errores de updates silenciosamente
+        console.log('Updates no disponibles:', error.message);
       }
     };
     

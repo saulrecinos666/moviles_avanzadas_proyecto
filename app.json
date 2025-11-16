@@ -2,7 +2,7 @@
   "expo": {
     "name": "MiCitaRemota",
     "slug": "mi-cita-remota-final",
-    "version": "3.0.0",
+    "version": "3.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -23,7 +23,7 @@
         "defaultChannelId": "default"
       },
       "package": "com.sistemasaludbienestar.app.v8",
-      "versionCode": 10,
+      "versionCode": 11,
       "adaptiveIcon": {
         "foregroundImage": "./assets/MiCitaRemota.png",
         "backgroundColor": "#ffffff"
@@ -88,12 +88,9 @@
       }
     },
     "owner": "saulbatres",
-    "runtimeVersion": "51.0.0",
+    "runtimeVersion": "52.0.0",
     "updates": {
-      "enabled": true,
-      "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/1db51e5b-ed58-41b9-aab4-5f40f2fdd098"
+      "enabled": false
     }
   }
 }

@@ -59,46 +59,6 @@ const ProtectedAgendarCita = ({ navigation, route }) => {
 const App = () => {
   useEffect(() => {
     clearCacheOnVersionUpdate();
-    
-    // Verificar y aplicar updates automáticamente (solo si el módulo está disponible)
-    const checkForUpdates = async () => {
-      try {
-        if (__DEV__) {
-          // En desarrollo, no verificar updates
-          return;
-        }
-        
-        // Verificar si el módulo de updates está disponible
-        let Updates;
-        try {
-          Updates = require('expo-updates');
-        } catch (e) {
-          // Módulo no disponible, salir silenciosamente
-          console.log('Updates module not available');
-          return;
-        }
-        
-        if (!Updates.isEnabled) {
-          console.log('Updates no están habilitados');
-          return;
-        }
-        
-        const update = await Updates.checkForUpdateAsync();
-        if (update.isAvailable) {
-          console.log('🔄 Actualización disponible, descargando...');
-          await Updates.fetchUpdateAsync();
-          console.log('✅ Actualización descargada, reiniciando app...');
-          await Updates.reloadAsync();
-        } else {
-          console.log('✅ App está actualizada');
-        }
-      } catch (error) {
-        // Ignorar errores de updates silenciosamente
-        console.log('Updates no disponibles:', error.message);
-      }
-    };
-    
-    checkForUpdates();
   }, []);
 
   return (
